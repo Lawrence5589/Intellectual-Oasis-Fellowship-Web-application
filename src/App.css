@@ -1,0 +1,29 @@
+.nav-arrow {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 50px;
+  height: 50px;
+  background-color: #624310;
+  border-radius: 50%;
+  color: white;
+  font-size: 24px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+  transition: background-color 0.3s, transform 0.3s, box-shadow 0.3s;
+  cursor: pointer;
+}
+
+.nav-arrow:hover {
+  background-color: #a47234;
+  transform: scale(1.5);
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.3);
+}
+.custom-scrollbar {
+  overflow-x: auto;
+  -ms-overflow-style: none;  /* Internet Explorer 10+ */
+  scrollbar-width: none;  /* Firefox */
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  display: none;  /* Safari and Chrome */
+}
