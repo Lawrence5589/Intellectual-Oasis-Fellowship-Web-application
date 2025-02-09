@@ -8,6 +8,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { getDoc, doc, setDoc } from 'firebase/firestore';
 
 function CoursePage() {
+  const navigate = useNavigate();
+  const { logout } = useAuth();
   const [certificationCourses, setCertificationCourses] = useState({});
   const [recommendedCourses, setRecommendedCourses] = useState({});
   const [activeCategory, setActiveCategory] = useState({
@@ -16,6 +18,7 @@ function CoursePage() {
   });
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
   const allCategories = [
     'Arts and Humanities', 'Biology and Health', 'Business', 'Information Technology', 'Language Learning',
@@ -100,13 +103,21 @@ function CoursePage() {
     };
   }, []);
 
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   const CourseCard = ({ course }) => {
     const [showDetails, setShowDetails] = useState(false);
     const [showModal, setShowModal] = useState(false);
     const [isEnrolled, setIsEnrolled] = useState(false);
     const [courseProgress, setCourseProgress] = useState(0);
     const [loading, setLoading] = useState(true);
-    const navigate = useNavigate();
     const { user } = useAuth();
 
     useEffect(() => {
@@ -466,17 +477,61 @@ function CoursePage() {
     );
   };
 
+  const handleSignOut = async () => {
+    try {
+      await logout();
+      navigate('/login');
+    } catch (error) {
+      console.error('Failed to log out:', error);
+    }
+  };
+
+  const MobileNavigation = () => (
+    <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-20">
+      <div className="flex justify-around items-center h-16">
+        <button
+          onClick={() => navigate('/dashboard')}
+          className="flex flex-col items-center p-2 text-gray-500"
+        >
+          <span className="text-xl">📊</span>
+          <span className="text-xs">Overview</span>
+        </button>
+        <button
+          onClick={() => navigate('/courses')}
+          className="flex flex-col items-center p-2 text-iof"
+        >
+          <span className="text-xl">📚</span>
+          <span className="text-xs">Courses</span>
+        </button>
+        <button
+          onClick={() => navigate('/dashboard')}
+          className="flex flex-col items-center p-2 text-gray-500"
+        >
+          <span className="text-xl">🏆</span>
+          <span className="text-xs">Certs</span>
+        </button>
+        <button
+          onClick={() => navigate('/more')}
+          className="flex flex-col items-center p-2 text-gray-500"
+        >
+          <span className="text-xl">⚡</span>
+          <span className="text-xs">More</span>
+        </button>
+      </div>
+    </div>
+  );
+
   return (
     <div className="flex min-h-screen bg-gray-100">
-      <Sidebar open={sidebarOpen} toggleSidebar={handleSidebarToggle} />
+      {!isMobile && <Sidebar open={sidebarOpen} toggleSidebar={handleSidebarToggle} />}
       <div className="flex-1 flex flex-col">
         <header className="bg-white shadow-md p-4 flex justify-between items-center sticky top-0 z-10">
           <button onClick={handleSidebarToggle} className="text-2xl text-iof-dark hover:text-iof">
-            &#9776; {/* Hamburger icon */}
+            &#9776;
           </button>
           <h1 className="text-xl font-bold text-iof">Courses</h1>
         </header>
-        <main className="p-6 space-y-8">
+        <main className={`p-6 space-y-8 ${isMobile ? 'pb-24' : ''}`}>
           {loading ? (
             <LoadingIndicator />
           ) : (
@@ -486,6 +541,7 @@ function CoursePage() {
             </>
           )}
         </main>
+        {isMobile && <MobileNavigation />}
       </div>
     </div>
   );

@@ -7,6 +7,7 @@ import LoadingIndicator from './LoadingIndicator';
 import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
 
 function EnrolledCourses({ enrolledCourses }) {
+  console.log('Received enrolledCourses prop:', enrolledCourses);
   const navigate = useNavigate();
   const { user } = useAuth();
   const [courseDetails, setCourseDetails] = useState([]);
@@ -17,12 +18,25 @@ function EnrolledCourses({ enrolledCourses }) {
 
   useEffect(() => {
     const fetchCourseDetails = async () => {
+      // Guard clause to check if enrolledCourses is valid
+      if (!enrolledCourses || !Array.isArray(enrolledCourses)) {
+        console.error('Invalid enrolledCourses:', enrolledCourses);
+        setLoading(false);
+        return;
+      }
+
       setLoading(true);
+      console.log('Starting to fetch course details for:', enrolledCourses);
       try {
         const detailedCourses = await Promise.all(
           enrolledCourses.map(async (course) => {
+            console.log('Fetching details for course:', course); // Add this debug log
             // Fetch course details
             const courseDoc = await getDoc(doc(db, 'courses', course.courseId));
+            if (!courseDoc.exists()) {
+              console.error('Course document not found:', course.courseId);
+              return null;
+            }
             const courseData = courseDoc.data();
 
             // Fetch progress

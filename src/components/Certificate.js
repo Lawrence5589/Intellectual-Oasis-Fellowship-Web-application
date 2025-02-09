@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../firebaseConfig';
 import { useAuth } from '../contexts/AuthContext';
 import LoadingIndicator from './LoadingIndicator';
@@ -55,81 +55,57 @@ function Certificate() {
 
         console.log('Retrieved data:', { courseData, completionData });
 
-        // Get or generate verification ID
-        let certVerificationId = completionData.verificationId;
-        const currentTime = new Date().toISOString();
-
         // Get completion timestamp, fallback to current time if not available
         const completionTimestamp = completionData.firstCompletedAt || 
                                   completionData.completedAt || 
-                                  currentTime;
+                                  new Date().toISOString();
 
-        console.log('Timestamps:', { 
-          completionTimestamp, 
-          firstCompletedAt: completionData.firstCompletedAt,
-          completedAt: completionData.completedAt,
-          currentTime 
-        });
+        // Check for existing certificate by courseId and userId
+        const certificatesRef = collection(db, 'certificates');
+        const q = query(
+          certificatesRef, 
+          where('courseId', '==', courseId),
+          where('userId', '==', user.uid)
+        );
+        const existingCerts = await getDocs(q);
+        let certVerificationId;
 
-        // If no verification ID exists, create one and store certificate data
-        if (!certVerificationId) {
-          try {
-            certVerificationId = `IOF-${uuidv4().substring(0, 8).toUpperCase()}`;
-            console.log('Generated new verification ID:', certVerificationId);
-
-            // Create certificate data
-            const certificateData = {
-              userId: user.uid,
-              userName: user.displayName || user.email,
-              courseId: courseId,
-              courseName: courseData.title,
-              completedAt: completionTimestamp,
-              generatedAt: currentTime,
-              verificationId: certVerificationId
-            };
-
-            console.log('Creating new certificate with data:', certificateData);
-
-            // Store verification ID in user's completed courses
-            await setDoc(completedRef, {
-              ...completionData,
-              verificationId: certVerificationId,
-              certificateGeneratedAt: currentTime,
-              firstCompletedAt: completionTimestamp
-            }, { merge: true });
-
-            // Store certificate in certificates collection
-            const certificateRef = doc(db, 'certificates', certVerificationId);
-            await setDoc(certificateRef, certificateData);
-            
-            console.log('Certificate created successfully');
-          } catch (error) {
-            console.error('Error creating certificate:', error);
-            throw new Error(`Failed to generate certificate: ${error.message}`);
-          }
+        if (!existingCerts.empty) {
+          // Use existing certificate
+          const existingCert = existingCerts.docs[0];
+          certVerificationId = existingCert.data().verificationId;
+          console.log('Using existing certificate:', certVerificationId);
         } else {
-          console.log('Using existing verification ID:', certVerificationId);
-        }
+          // Create new certificate only if one doesn't exist
+          certVerificationId = `IOF-${uuidv4().substring(0, 8).toUpperCase()}`;
+          console.log('Generated new verification ID:', certVerificationId);
 
-        // Verify certificate exists
-        const certificateRef = doc(db, 'certificates', certVerificationId);
-        const certificateDoc = await getDoc(certificateRef);
-
-        if (!certificateDoc.exists()) {
-          console.log('Certificate document not found, recreating...');
-          
+          // Create certificate data
           const certificateData = {
             userId: user.uid,
             userName: user.displayName || user.email,
             courseId: courseId,
             courseName: courseData.title,
             completedAt: completionTimestamp,
-            generatedAt: currentTime,
+            generatedAt: new Date().toISOString(),
             verificationId: certVerificationId
           };
 
+          console.log('Creating new certificate with data:', certificateData);
+
+          // Store verification ID in user's completed courses
+          await setDoc(completedRef, {
+            ...completionData,
+            verificationId: certVerificationId,
+            certificateGeneratedAt: new Date().toISOString(),
+            firstCompletedAt: completionTimestamp
+          }, { merge: true });
+
+          // Store certificate in certificates collection
+          const certificateRef = doc(db, 'certificates', certVerificationId);
           await setDoc(certificateRef, certificateData);
-          console.log('Certificate recreated successfully');
+          
+          console.log('Certificate created successfully');
         }
 
         // Update state
@@ -241,7 +217,7 @@ function Certificate() {
         >
           {/* IOF Logo */}
           <img 
-            src="/images/Group 4.png"
+            src="/images/Group 4.jpg"
             alt="IOF Logo" 
             className="absolute top-8 left-8 w-[100px] h-auto object-contain"
           />

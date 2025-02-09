@@ -1,5 +1,5 @@
 import React from 'react';
-import { Route, Routes } from 'react-router-dom';
+import { Route, Routes, Navigate } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import SignUp from './components/SignUp';
 import Login from './components/Login';
@@ -12,11 +12,23 @@ import CourseContent from './components/CourseContent';
 import CoursePresentation from './components/CoursePresentation';
 import ExamPage from './components/ExamPage';
 import ResultsPage from './components/ResultsPage';
-import { AuthProvider } from './contexts/AuthContext';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 import VerifyCertificate from './components/VerifyCertificate';
 import Certificate from './components/Certificate';
 import NotFound from './components/NotFound';
+import Quiz from './components/quiz/Quiz';
+import PublicQuizEntry from './components/quiz/PublicQuizEntry';
+import QuizResults from './components/quiz/QuizResults';
 import './App.css';
+
+// Protected Route wrapper component
+const ProtectedRoute = ({ children }) => {
+  const { currentUser } = useAuth();
+  if (!currentUser) {
+    return <Navigate to="/login" replace />;
+  }
+  return children;
+};
 
 function App() {
   return (
@@ -63,6 +75,20 @@ function App() {
             path="/courses/:courseId/content/:moduleTitle/:subCourseId" 
             element={<CoursePresentation />} 
           />
+          <Route path="/public-quiz/:quizId" element={<PublicQuizEntry />} />
+          <Route 
+            path="/take-quiz/:quizId" 
+            element={
+              <PrivateRoute>
+                <Quiz />
+              </PrivateRoute>
+            } 
+          />
+          <Route path="/quiz-results/:quizId" element={
+            <PrivateRoute>
+              <QuizResults />
+            </PrivateRoute>
+          } />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </div>

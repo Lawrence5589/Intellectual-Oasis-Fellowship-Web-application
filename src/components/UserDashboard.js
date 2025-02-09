@@ -5,7 +5,6 @@ import Sidebar from './Sidebar';
 import CoursesTray from './CoursesTray';
 import EnrolledCourses from './EnrolledCourses';
 import QuizSection from './QuizSection';
-import Leaderboard from './Leaderboard';
 import Announcements from './Announcements';
 import { useAuth } from '../contexts/AuthContext';
 import LoadingIndicator from './LoadingIndicator';
@@ -13,7 +12,7 @@ import CourseUserAnalytics from './CourseUserAnalytics';
 import { useNavigate } from 'react-router-dom';
 
 function Dashboard() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -21,7 +20,6 @@ function Dashboard() {
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [data, setData] = useState({
     enrolledCourses: [],
-    leaderboardData: [],
     announcements: []
   });
 
@@ -45,20 +43,15 @@ function Dashboard() {
         setLoading(true);
         
         // Fetch enrolled courses
-        const enrolledRef = collection(db, 'users', user.uid, 'enrolledCourses');
+        const enrolledRef = collection(db, 'users', user.uid, 'courseProgress');
+        console.log('Fetching course progress for user:', user.uid);
         const enrolledSnapshot = await getDocs(enrolledRef);
+        console.log('Course progress snapshot exists:', !enrolledSnapshot.empty);
         const enrolledCourses = enrolledSnapshot.docs.map(doc => ({
           courseId: doc.id,
           ...doc.data()
         }));
-
-        // Fetch leaderboard data
-        const leaderboardRef = collection(db, 'leaderboard');
-        const leaderboardSnapshot = await getDocs(leaderboardRef);
-        const leaderboardData = leaderboardSnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
+        console.log('Fetched course progress:', enrolledCourses);
 
         // Fetch announcements
         const announcementsRef = collection(db, 'announcements');
@@ -71,7 +64,6 @@ function Dashboard() {
 
         setData({
           enrolledCourses,
-          leaderboardData,
           announcements
         });
 
@@ -85,8 +77,13 @@ function Dashboard() {
     fetchDashboardData();
   }, [user, navigate]);
 
-  const handleSignOut = () => {
-    navigate('/login');
+  const handleSignOut = async () => {
+    try {
+      await logout();
+      navigate('/login');
+    } catch (error) {
+      console.error('Failed to log out:', error);
+    }
   };
 
   const MobileNavigation = () => (
@@ -103,9 +100,7 @@ function Dashboard() {
         </button>
         <button
           onClick={() => navigate('/courses')}
-          className={`flex flex-col items-center p-2 ${
-            activeTab === 'courses' ? 'text-iof' : 'text-gray-500'
-          }`}
+          className="flex flex-col items-center p-2 text-gray-500"
         >
           <span className="text-xl">📚</span>
           <span className="text-xs">Courses</span>
@@ -154,7 +149,6 @@ function Dashboard() {
       case 'more':
         return (
           <div className="space-y-4 pb-20">
-            <Leaderboard data={data.leaderboardData} />
             <div className="p-4 bg-white rounded-lg shadow">
               <h3 className="text-lg font-semibold mb-4">Quick Links</h3>
               <div className="grid grid-cols-2 gap-4">
@@ -208,11 +202,10 @@ function Dashboard() {
           {isMobile ? renderMobileContent() : (
             <div className="space-y-8">
               <Announcements announcements={data.announcements} />
-              <CourseUserAnalytics />
               <CoursesTray />
               <EnrolledCourses enrolledCourses={data.enrolledCourses} />
               <QuizSection />
-              <Leaderboard data={data.leaderboardData} />
+              <CourseUserAnalytics />
             </div>
           )}
         </main>

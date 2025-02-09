@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { db } from '../firebaseConfig';
-import { collection, addDoc, getDocs, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, getDocs, deleteDoc, doc, serverTimestamp, writeBatch, query, where } from 'firebase/firestore';
 
 function QuizManagement() {
   const [quizTitle, setQuizTitle] = useState('');
@@ -12,9 +12,26 @@ function QuizManagement() {
   const [quizzes, setQuizzes] = useState([]);
   const [selectedDifficulty, setSelectedDifficulty] = useState('all');
   const fileInputRef = useRef(null);
+  const [questions, setQuestions] = useState([]);
+  const [statistics, setStatistics] = useState({
+    total: 0,
+    bySubject: {},
+    byTopic: {},
+    byDifficulty: {
+      beginner: 0,
+      intermediate: 0,
+      advanced: 0
+    }
+  });
+  const [filterSubject, setFilterSubject] = useState('all');
+  const [filterTopic, setFilterTopic] = useState('all');
+  const [filterDifficulty, setFilterDifficulty] = useState('all');
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteCount, setDeleteCount] = useState(0);
 
   useEffect(() => {
     fetchQuizzes();
+    fetchQuestions();
   }, []);
 
   const fetchQuizzes = async () => {
@@ -29,6 +46,44 @@ function QuizManagement() {
     } catch (error) {
       console.error("Error fetching quizzes:", error);
       setUploadError("Failed to fetch quizzes");
+    }
+  };
+
+  const fetchQuestions = async () => {
+    try {
+      const questionsCollection = collection(db, 'questions');
+      const questionsSnapshot = await getDocs(questionsCollection);
+      const questionsList = questionsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setQuestions(questionsList);
+      
+      // Calculate statistics
+      const stats = {
+        total: questionsList.length,
+        bySubject: {},
+        byTopic: {},
+        byDifficulty: {
+          beginner: 0,
+          intermediate: 0,
+          advanced: 0
+        }
+      };
+
+      questionsList.forEach(question => {
+        // Count by subject
+        stats.bySubject[question.subject] = (stats.bySubject[question.subject] || 0) + 1;
+        // Count by topic
+        stats.byTopic[question.topic] = (stats.byTopic[question.topic] || 0) + 1;
+        // Count by difficulty
+        stats.byDifficulty[question.difficulty.toLowerCase()]++;
+      });
+
+      setStatistics(stats);
+    } catch (error) {
+      console.error("Error fetching questions:", error);
+      setUploadError("Failed to fetch questions");
     }
   };
 
@@ -60,6 +115,94 @@ function QuizManagement() {
     linkElement.setAttribute('href', dataUri);
     linkElement.setAttribute('download', exportFileDefaultName);
     linkElement.click();
+  };
+
+  const getFilteredQuestions = () => {
+    let filteredQuestions = [...questions];
+
+    if (filterSubject !== 'all') {
+      filteredQuestions = filteredQuestions.filter(q => q.subject === filterSubject);
+    }
+
+    if (filterTopic !== 'all') {
+      filteredQuestions = filteredQuestions.filter(q => q.topic === filterTopic);
+    }
+
+    if (filterDifficulty !== 'all') {
+      filteredQuestions = filteredQuestions.filter(q => 
+        q.difficulty.toLowerCase() === filterDifficulty.toLowerCase()
+      );
+    }
+
+    return filteredQuestions;
+  };
+
+  const handleDeleteQuestions = async () => {
+    try {
+      setLoading(true);
+      const questionsToDelete = getFilteredQuestions();
+      setDeleteCount(questionsToDelete.length);
+      setShowDeleteConfirm(true);
+    } catch (error) {
+      console.error("Error preparing delete:", error);
+      setUploadError("Failed to prepare questions for deletion");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const confirmDelete = async () => {
+    try {
+      setLoading(true);
+      const questionsToDelete = getFilteredQuestions();
+      
+      // Use batched writes for better performance
+      const batch = writeBatch(db);
+      questionsToDelete.forEach(question => {
+        const questionRef = doc(db, 'questions', question.id);
+        batch.delete(questionRef);
+      });
+      
+      await batch.commit();
+      
+      // Refresh questions and statistics
+      await fetchQuestions();
+      setUploadSuccess(`Successfully deleted ${questionsToDelete.length} questions`);
+    } catch (error) {
+      console.error("Error deleting questions:", error);
+      setUploadError("Failed to delete questions");
+    } finally {
+      setLoading(false);
+      setShowDeleteConfirm(false);
+    }
+  };
+
+  const exportFilteredQuestions = async () => {
+    try {
+      const filteredQuestions = getFilteredQuestions();
+      
+      // Clean up questions before export
+      const cleanedQuestions = filteredQuestions.map(q => ({
+        question: q.question,
+        options: q.options,
+        correctOption: q.correctOption,
+        subject: q.subject,
+        topic: q.topic,
+        difficulty: q.difficulty
+      }));
+
+      const dataStr = JSON.stringify({ questions: cleanedQuestions }, null, 2);
+      const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+      const exportFileDefaultName = `questions-${filterSubject}-${filterTopic}-${filterDifficulty}-${new Date().toISOString()}.json`;
+
+      const linkElement = document.createElement('a');
+      linkElement.setAttribute('href', dataUri);
+      linkElement.setAttribute('download', exportFileDefaultName);
+      linkElement.click();
+    } catch (error) {
+      console.error("Error exporting questions:", error);
+      setUploadError("Failed to export questions");
+    }
   };
 
   const handleQuizUpload = async () => {
@@ -94,26 +237,29 @@ function QuizManagement() {
                 !Array.isArray(question.options) || 
                 question.options.length === 0 || 
                 typeof question.correctOption !== 'number' ||
+                !question.subject ||
+                !question.topic ||
                 !question.difficulty ||
-                !['easy', 'medium', 'hard'].includes(question.difficulty.toLowerCase())) {
-              throw new Error(`Invalid question format at index ${idx}. Each question must have: question text, options array, correctOption number, and difficulty level (easy/medium/hard)`);
+                !['beginner', 'intermediate', 'advanced'].includes(question.difficulty.toLowerCase())) {
+              throw new Error(`Invalid question format at index ${idx}. Each question must have: question text, options array, correctOption number, subject, topic, and difficulty level (beginner/intermediate/advanced)`);
             }
           });
 
-          // Add quiz to Firestore
-          const quizRef = collection(db, 'quizzes');
-          await addDoc(quizRef, {
-            title: quizTitle,
-            description: quizDescription,
-            questions: quizData.questions,
-            createdAt: serverTimestamp(),
-            totalQuestions: quizData.questions.length,
-            difficultyBreakdown: {
-              easy: quizData.questions.filter(q => q.difficulty.toLowerCase() === 'easy').length,
-              medium: quizData.questions.filter(q => q.difficulty.toLowerCase() === 'medium').length,
-              hard: quizData.questions.filter(q => q.difficulty.toLowerCase() === 'hard').length
-            }
+          // Add questions to Firestore
+          const questionsRef = collection(db, 'questions');
+          const batch = writeBatch(db);
+          
+          quizData.questions.forEach((question) => {
+            const newQuestionRef = doc(questionsRef);
+            batch.set(newQuestionRef, {
+              ...question,
+              createdAt: serverTimestamp(),
+              setTitle: quizTitle, // reference to original set
+              setDescription: quizDescription
+            });
           });
+
+          await batch.commit();
 
           setUploadSuccess(true);
           // Reset form
@@ -141,38 +287,38 @@ function QuizManagement() {
   return (
     <div className="space-y-8">
       <section id="quiz-management" className="bg-white p-6 rounded-lg shadow-lg">
-        <h2 className="text-2xl font-semibold mb-4">Create New Quiz</h2>
+        <h2 className="text-2xl font-semibold mb-4">Upload Questions</h2>
         
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Quiz Title
+              Set Title
             </label>
             <input
               type="text"
               value={quizTitle}
               onChange={(e) => setQuizTitle(e.target.value)}
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-              placeholder="Enter quiz title"
+              placeholder="Enter set title"
             />
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Quiz Description
+              Set Description
             </label>
             <textarea
               value={quizDescription}
               onChange={(e) => setQuizDescription(e.target.value)}
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
               rows="3"
-              placeholder="Enter quiz description"
+              placeholder="Enter set description"
             />
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Upload Quiz File (JSON format)
+              Upload Questions File (JSON format)
               <div className="text-xs text-gray-500 mt-1">
                 Expected JSON format:
                 <pre className="bg-gray-100 p-2 mt-1 rounded overflow-x-auto">
@@ -182,7 +328,9 @@ function QuizManagement() {
       "question": "Question text",
       "options": ["Option 1", "Option 2", "Option 3", "Option 4"],
       "correctOption": 0,
-      "difficulty": "easy" // or "medium" or "hard"
+      "subject": "Biology", // Main subject (Biology/Chemistry/Physics)
+      "topic": "Cell Biology", // Specific topic within the subject
+      "difficulty": "beginner" // or "intermediate" or "advanced"
     }
   ]
 }`}
@@ -205,7 +353,7 @@ function QuizManagement() {
               ${loading ? 'bg-gray-400' : 'bg-iof hover:bg-iof-dark'} 
               focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-iof`}
           >
-            {loading ? 'Uploading...' : 'Upload Quiz'}
+            {loading ? 'Uploading...' : 'Upload Questions'}
           </button>
 
           {uploadError && (
@@ -216,71 +364,145 @@ function QuizManagement() {
           
           {uploadSuccess && (
             <div className="text-green-500 text-sm mt-2">
-              Quiz uploaded successfully!
+              Questions uploaded successfully!
             </div>
           )}
         </div>
       </section>
 
       <section className="bg-white p-6 rounded-lg shadow-lg">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-2xl font-semibold">Existing Quizzes</h2>
-          <div className="space-x-2">
-            <select
-              value={selectedDifficulty}
-              onChange={(e) => setSelectedDifficulty(e.target.value)}
-              className="rounded-md border-gray-300 shadow-sm focus:border-iof focus:ring-iof"
-            >
-              <option value="all">All Difficulties</option>
-              <option value="easy">Easy</option>
-              <option value="medium">Medium</option>
-              <option value="hard">Hard</option>
-            </select>
-            <button
-              onClick={() => exportQuizzes(selectedDifficulty)}
-              className="bg-[rgb(130,88,18)] text-white py-2 px-4 rounded-md hover:bg-[rgb(110,68,0)] transition-colors"
-            >
-              Export Selected
-            </button>
+        <h2 className="text-2xl font-semibold mb-4">Questions Pool Statistics</h2>
+        
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          <div className="bg-gray-50 p-4 rounded-lg">
+            <h3 className="text-lg font-medium mb-2">Total Questions</h3>
+            <p className="text-3xl font-bold text-iof">{statistics.total}</p>
+          </div>
+          
+          <div className="bg-gray-50 p-4 rounded-lg">
+            <h3 className="text-lg font-medium mb-2">By Subject</h3>
+            <div className="space-y-1 max-h-40 overflow-y-auto">
+              {Object.entries(statistics.bySubject).map(([subject, count]) => (
+                <div key={subject} className="flex justify-between">
+                  <span>{subject}:</span>
+                  <span className="font-medium">{count}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          
+          <div className="bg-gray-50 p-4 rounded-lg">
+            <h3 className="text-lg font-medium mb-2">By Topic</h3>
+            <div className="space-y-1 max-h-40 overflow-y-auto">
+              {Object.entries(statistics.byTopic).map(([topic, count]) => (
+                <div key={topic} className="flex justify-between">
+                  <span>{topic}:</span>
+                  <span className="font-medium">{count}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          
+          <div className="bg-gray-50 p-4 rounded-lg">
+            <h3 className="text-lg font-medium mb-2">By Difficulty</h3>
+            <div className="space-y-1">
+              <div className="flex justify-between">
+                <span>Beginner:</span>
+                <span className="font-medium">{statistics.byDifficulty.beginner}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Intermediate:</span>
+                <span className="font-medium">{statistics.byDifficulty.intermediate}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Advanced:</span>
+                <span className="font-medium">{statistics.byDifficulty.advanced}</span>
+              </div>
+            </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {quizzes.map(quiz => (
-            <div key={quiz.id} className="border rounded-lg p-4 shadow">
-              <h3 className="font-semibold text-lg mb-2">{quiz.title}</h3>
-              <p className="text-gray-600 text-sm mb-2">{quiz.description}</p>
-              <div className="space-y-2">
-                <div className="text-sm">
-                  <span className="font-medium">Total Questions:</span> {quiz.totalQuestions}
-                </div>
-                <div className="text-sm">
-                  <span className="font-medium">Difficulty Breakdown:</span>
-                  <div className="ml-2">
-                    <div className="text-green-600">Easy: {quiz.difficultyBreakdown?.easy || 0}</div>
-                    <div className="text-yellow-600">Medium: {quiz.difficultyBreakdown?.medium || 0}</div>
-                    <div className="text-red-600">Hard: {quiz.difficultyBreakdown?.hard || 0}</div>
-                  </div>
-                </div>
-                <div className="flex justify-between items-center mt-4">
-                  <button
-                    onClick={() => deleteQuiz(quiz.id)}
-                    className="text-red-600 hover:text-red-800"
-                  >
-                    Delete Quiz
-                  </button>
-                  <button
-                    onClick={() => exportQuizzes(quiz.id)}
-                    className="bg-[rgb(130,88,18)] text-white py-2 px-4 rounded-md hover:bg-[rgb(110,68,0)] transition-colors"
-                  >
-                    Export Quiz
-                  </button>
-                </div>
-              </div>
-            </div>
-          ))}
+        <div className="flex items-center gap-4 mb-4">
+          <select
+            value={filterSubject}
+            onChange={(e) => setFilterSubject(e.target.value)}
+            className="rounded-md border-gray-300 shadow-sm focus:border-iof focus:ring-iof"
+          >
+            <option value="all">All Subjects</option>
+            {Object.keys(statistics.bySubject).map(subject => (
+              <option key={subject} value={subject}>{subject}</option>
+            ))}
+          </select>
+
+          <select
+            value={filterTopic}
+            onChange={(e) => setFilterTopic(e.target.value)}
+            className="rounded-md border-gray-300 shadow-sm focus:border-iof focus:ring-iof"
+          >
+            <option value="all">All Topics</option>
+            {Object.keys(statistics.byTopic).map(topic => (
+              <option key={topic} value={topic}>{topic}</option>
+            ))}
+          </select>
+
+          <select
+            value={filterDifficulty}
+            onChange={(e) => setFilterDifficulty(e.target.value)}
+            className="rounded-md border-gray-300 shadow-sm focus:border-iof focus:ring-iof"
+          >
+            <option value="all">All Difficulties</option>
+            <option value="beginner">Beginner</option>
+            <option value="intermediate">Intermediate</option>
+            <option value="advanced">Advanced</option>
+          </select>
+
+          <div className="flex gap-2">
+            <button
+              onClick={exportFilteredQuestions}
+              className="bg-[rgb(130,88,18)] text-white py-2 px-4 rounded-md hover:bg-[rgb(110,68,0)] transition-colors"
+            >
+              Export Filtered Questions
+            </button>
+
+            <button
+              onClick={handleDeleteQuestions}
+              className="bg-red-600 text-white py-2 px-4 rounded-md hover:bg-red-700 transition-colors"
+            >
+              Delete Filtered Questions
+            </button>
+          </div>
         </div>
       </section>
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full">
+            <h3 className="text-xl font-semibold mb-4">Confirm Delete</h3>
+            <p className="mb-4">
+              Are you sure you want to delete {deleteCount} questions matching these filters?
+              <br />
+              <span className="text-red-600 font-semibold">This action cannot be undone.</span>
+            </p>
+            <div className="flex justify-end gap-4">
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                className="px-4 py-2 bg-gray-200 rounded-md hover:bg-gray-300 transition-colors"
+                disabled={loading}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDelete}
+                className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors"
+                disabled={loading}
+              >
+                {loading ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
