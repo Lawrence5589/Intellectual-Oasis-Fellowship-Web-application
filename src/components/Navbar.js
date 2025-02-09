@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { useAuth } from '../AuthContext'; // Use the auth hook
+import { useAuth } from '../contexts/AuthContext'; // Use the auth hook
 import UserProfileIcon from './UserProfileIcon'; // A simple placeholder for user profile icon
 
 function Navbar() {

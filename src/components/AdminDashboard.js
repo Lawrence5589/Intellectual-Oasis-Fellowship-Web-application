@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import AdminSidebar from './AdminSidebar';
 import UserManagement from './UserManagement';
+import UserProgress from './UserProgress';
 import CourseManagement from './CourseManagement';
 import QuizManagement from './QuizManagement';
 import Analytics from './Analytics';
@@ -26,6 +27,7 @@ function AdminDashboard() {
         </header>
         <main className="p-6 space-y-8">
           <UserManagement />
+          <UserProgress />
           <CourseManagement />
           <QuizManagement />
           <Analytics />

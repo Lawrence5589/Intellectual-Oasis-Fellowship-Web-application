@@ -1,128 +1,188 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { db } from '../firebaseConfig';
-import { collection, getDocs, doc, deleteDoc, updateDoc, addDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, deleteDoc, updateDoc, getDoc } from 'firebase/firestore';
+import { useAuth } from '../contexts/AuthContext';
+import LoadingIndicator from './LoadingIndicator';
 
 function UserManagement() {
   const [users, setUsers] = useState([]);
-  const [newUserEmail, setNewUserEmail] = useState('');
   const [error, setError] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
+  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [roleFilter, setRoleFilter] = useState('all');
+  const [currentPage, setCurrentPage] = useState(1);
+  const { user } = useAuth();
 
   const ITEMS_PER_PAGE = 10;
 
   useEffect(() => {
     const fetchUsers = async () => {
       try {
+        if (!user) {
+          setError('Please log in to access this page');
+          setLoading(false);
+          return;
+        }
+
+        // Check admin status
+        const userDoc = await getDoc(doc(db, 'users', user.uid));
+        if (!userDoc.exists() || userDoc.data().role !== 'admin') {
+          setError('Access denied. Admin privileges required.');
+          setLoading(false);
+          return;
+        }
+
         const usersSnapshot = await getDocs(collection(db, 'users'));
-        setUsers(usersSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
+        const usersData = usersSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        setUsers(usersData);
+        setLoading(false);
       } catch (error) {
-        console.error('Error fetching users: ', error);
+        console.error('Error fetching users:', error);
+        setError('Failed to fetch users');
+        setLoading(false);
       }
     };
 
     fetchUsers();
-  }, []);
+  }, [user]);
 
-  const handleAddUser = async () => {
+  const handleRoleChange = async (userId, newRole) => {
     try {
-      await addDoc(collection(db, 'users'), {
-        email: newUserEmail,
-        isAdmin: false,
-        createdAt: new Date(),
-        lastLogin: null,
-      });
-      setNewUserEmail('');
-      alert('User added successfully!');
+      await updateDoc(doc(db, 'users', userId), { role: newRole });
+      setUsers(users.map(u => 
+        u.id === userId ? { ...u, role: newRole } : u
+      ));
     } catch (error) {
-      console.error('Error adding user: ', error);
-      setError('Failed to add user');
-    }
-  };
-
-  const handleDeleteUser = async (userId) => {
-    try {
-      await deleteDoc(doc(db, 'users', userId));
-      setUsers(users.filter(user => user.id !== userId));
-      alert('User deleted successfully!');
-    } catch (error) {
-      console.error('Error deleting user: ', error);
-      setError('Failed to delete user');
-    }
-  };
-
-  const handleMakeAdmin = async (userId, isAdmin) => {
-    try {
-      await updateDoc(doc(db, 'users', userId), { isAdmin: !isAdmin });
-      alert('User role updated successfully!');
-    } catch (error) {
-      console.error('Error updating user role: ', error);
       setError('Failed to update user role');
     }
   };
 
-  const filteredUsers = users.filter(user =>
-    user.email.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredUsers = users.filter(user => {
+    const matchesSearch = (user.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         user.name?.toLowerCase().includes(searchQuery.toLowerCase()));
+    const matchesRole = roleFilter === 'all' || user.role === roleFilter;
+    return matchesSearch && matchesRole;
+  });
 
+  const totalPages = Math.ceil(filteredUsers.length / ITEMS_PER_PAGE);
   const paginatedUsers = filteredUsers.slice(
     (currentPage - 1) * ITEMS_PER_PAGE,
     currentPage * ITEMS_PER_PAGE
   );
 
-  const totalPages = Math.ceil(filteredUsers.length / ITEMS_PER_PAGE);
+  const handlePageChange = (newPage) => {
+    if (newPage >= 1 && newPage <= totalPages) {
+      setCurrentPage(newPage);
+    }
+  };
+
+  if (loading) return <LoadingIndicator />;
+  if (error) return <div className="text-red-600 p-4">{error}</div>;
 
   return (
-    <section id="user-management" className="bg-white p-4 rounded-lg shadow">
+    <section className="bg-white p-4 rounded-lg shadow">
       <h2 className="text-2xl font-semibold mb-4">User Management</h2>
-      {error && <p className="text-red-500">{error}</p>}
-      <div className="mb-4 flex space-x-2">
+      
+      <div className="flex gap-4 mb-4">
         <input
-          type="email"
-          placeholder="New user email"
-          value={newUserEmail}
-          onChange={(e) => setNewUserEmail(e.target.value)}
-          className="p-2 border rounded mr-2"
+          type="text"
+          placeholder="Search by name or email"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="flex-1 p-2 border rounded"
         />
-        <button onClick={handleAddUser} className="bg-iof text-white px-4 py-2 rounded hover:bg-green-700">
-          Add User
-        </button>
+        <select
+          value={roleFilter}
+          onChange={(e) => setRoleFilter(e.target.value)}
+          className="p-2 border rounded"
+        >
+          <option value="all">All Roles</option>
+          <option value="admin">Admin</option>
+          <option value="user">User</option>
+        </select>
       </div>
-      <input
-        type="text"
-        placeholder="Search users"
-        value={searchQuery}
-        onChange={(e) => setSearchQuery(e.target.value)}
-        className="mb-4 p-2 border rounded w-full"
-      />
-      <div className="max-h-64 overflow-y-auto">
-        <ul>
-          {paginatedUsers.map(user => (
-            <li key={user.id} className="flex justify-between items-center mb-2">
-              <div>
-                <p>{user.email}</p>
-                <p>Date Created: {user.createdAt && user.createdAt.toDate().toLocaleDateString()}</p>
-                <p>Last Login: {user.lastLogin ? user.lastLogin.toDate().toLocaleDateString() : 'Never'}</p>
-              </div>
-              <div className="flex space-x-2">
-                <button onClick={() => handleMakeAdmin(user.id, user.isAdmin)} className={`px-2 py-1 rounded ${user.isAdmin ? 'bg-yellow-500' : 'bg-iof-light'} hover:bg-opacity-80`}>
-                  {user.isAdmin ? 'Revoke Admin' : 'Make Admin'}
-                </button>
-                <button onClick={() => handleDeleteUser(user.id)} className="bg-red-500 text-white px-2 py-1 rounded hover:bg-red-700">
-                  Delete
-                </button>
-              </div>
-            </li>
+
+      <div className="overflow-x-auto">
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Role</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-200">
+            {paginatedUsers.map(user => (
+              <tr key={user.id}>
+                <td className="px-6 py-4 whitespace-nowrap text-sm">{user.name || 'N/A'}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm">{user.email}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm">{user.role}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm">
+                  <select
+                    value={user.role}
+                    onChange={(e) => handleRoleChange(user.id, e.target.value)}
+                    className="p-1 border rounded"
+                  >
+                    <option value="user">User</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Pagination Controls */}
+      <div className="mt-4 flex items-center justify-between">
+        <div className="flex items-center space-x-2">
+          <span className="text-sm text-gray-700">
+            Showing {Math.min(((currentPage - 1) * ITEMS_PER_PAGE) + 1, filteredUsers.length)} to{' '}
+            {Math.min(currentPage * ITEMS_PER_PAGE, filteredUsers.length)} of{' '}
+            {filteredUsers.length} entries
+          </span>
+        </div>
+        <div className="flex items-center space-x-2">
+          <button
+            onClick={() => handlePageChange(currentPage - 1)}
+            disabled={currentPage === 1}
+            className={`px-3 py-1 rounded ${
+              currentPage === 1
+                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                : 'bg-[rgb(130,88,18)] text-white hover:bg-[rgb(110,68,0)]'
+            }`}
+          >
+            Previous
+          </button>
+          {[...Array(totalPages)].map((_, index) => (
+            <button
+              key={index + 1}
+              onClick={() => handlePageChange(index + 1)}
+              className={`px-3 py-1 rounded ${
+                currentPage === index + 1
+                  ? 'bg-[rgb(130,88,18)] text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              {index + 1}
+            </button>
           ))}
-        </ul>
-      </div>
-      <div className="mt-4 flex justify-center space-x-2">
-        <button onClick={() => setCurrentPage(currentPage - 1)} disabled={currentPage === 1} className="px-2 py-1 bg-gray-300 rounded hover:bg-gray-400 disabled:opacity-50">
-          Previous
-        </button>
-        <button onClick={() => setCurrentPage(currentPage + 1)} disabled={currentPage === totalPages} className="px-2 py-1 bg-gray-300 rounded hover:bg-gray-400 disabled:opacity-50">
-          Next
-        </button>
+          <button
+            onClick={() => handlePageChange(currentPage + 1)}
+            disabled={currentPage === totalPages}
+            className={`px-3 py-1 rounded ${
+              currentPage === totalPages
+                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                : 'bg-[rgb(130,88,18)] text-white hover:bg-[rgb(110,68,0)]'
+            }`}
+          >
+            Next
+          </button>
+        </div>
       </div>
     </section>
   );

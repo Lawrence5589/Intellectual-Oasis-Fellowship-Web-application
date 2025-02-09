@@ -238,7 +238,7 @@ function QuizManagement() {
             </select>
             <button
               onClick={() => exportQuizzes(selectedDifficulty)}
-              className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md"
+              className="bg-[rgb(130,88,18)] text-white py-2 px-4 rounded-md hover:bg-[rgb(110,68,0)] transition-colors"
             >
               Export Selected
             </button>
@@ -271,7 +271,7 @@ function QuizManagement() {
                   </button>
                   <button
                     onClick={() => exportQuizzes(quiz.id)}
-                    className="text-iof hover:text-iof-dark"
+                    className="bg-[rgb(130,88,18)] text-white py-2 px-4 rounded-md hover:bg-[rgb(110,68,0)] transition-colors"
                   >
                     Export Quiz
                   </button>

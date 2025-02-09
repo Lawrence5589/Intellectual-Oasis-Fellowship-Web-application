@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../AuthContext'; // Import your authentication context
+import { useAuth } from '../contexts/AuthContext'; // Import your authentication context
 
 function UserProfileIcon() {
   const { user } = useAuth(); // Assuming user object has a displayName property

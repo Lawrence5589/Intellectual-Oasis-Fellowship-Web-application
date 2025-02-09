@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { collection, addDoc, getDocs, query, orderBy, where } from 'firebase/firestore';
+import { collection, addDoc, getDocs, query, orderBy, where, updateDoc, deleteDoc, doc } from 'firebase/firestore';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
 import { db } from '../firebaseConfig';
+import LoadingIndicator from './LoadingIndicator';
 
 function AnnouncementsManager() {
   const [announcement, setAnnouncement] = useState('');
@@ -9,13 +10,14 @@ function AnnouncementsManager() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [editId, setEditId] = useState(null);
+  const [editText, setEditText] = useState('');
   const auth = getAuth();
 
-  // Check admin status using email instead of UID
+  // Check admin status using email
   useEffect(() => {
     const checkAdminStatus = async () => {
       if (!auth.currentUser?.email) {
-        console.log('No user email available');
         setLoading(false);
         return;
       }
@@ -27,14 +29,11 @@ function AnnouncementsManager() {
         
         if (!querySnapshot.empty) {
           const userData = querySnapshot.docs[0].data();
-          console.log('Found user data:', userData);
           setIsAdmin(userData.isAdmin === true);
         } else {
-          console.log('No user found with email:', auth.currentUser.email);
           setIsAdmin(false);
         }
       } catch (error) {
-        console.error('Error checking admin status:', error);
         setIsAdmin(false);
       }
       
@@ -42,7 +41,6 @@ function AnnouncementsManager() {
     };
 
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      console.log('Auth state changed:', currentUser?.email);
       setUser(currentUser);
       if (currentUser) {
         checkAdminStatus();
@@ -55,7 +53,6 @@ function AnnouncementsManager() {
     return () => unsubscribe();
   }, []);
 
-  // Fetch announcements
   useEffect(() => {
     const fetchAnnouncements = async () => {
       try {
@@ -79,13 +76,11 @@ function AnnouncementsManager() {
 
   const handleAddAnnouncement = async () => {
     if (!user) {
-      console.log('No user logged in');
       alert('You must be logged in to add announcements');
       return;
     }
 
     if (!isAdmin) {
-      console.log('User is not admin:', user.email);
       alert('Only administrators can add announcements');
       return;
     }
@@ -95,37 +90,48 @@ function AnnouncementsManager() {
     }
 
     try {
-      console.log('Creating announcement as user:', user.email);
-      console.log('Admin status:', isAdmin);
-      
       const newAnnouncement = {
         text: announcement,
         timestamp: new Date().toISOString(),
-        createdBy: user.email, // Store email instead of UID
+        createdBy: user.email,
         createdAt: new Date()
       };
       
-      console.log('Attempting to create announcement:', newAnnouncement);
-      
       const docRef = await addDoc(collection(db, 'announcements'), newAnnouncement);
-      console.log('Successfully created announcement:', docRef.id);
-      
       setAnnouncements([{ id: docRef.id, ...newAnnouncement }, ...announcements]);
       setAnnouncement('');
     } catch (error) {
-      console.error('Error adding announcement:', error);
-      console.error('Error details:', {
-        code: error.code,
-        message: error.message,
-        userEmail: user.email,
-        isAdmin: isAdmin
-      });
       alert(`Error adding announcement: ${error.message}`);
     }
   };
 
+  const handleEditAnnouncement = async (id) => {
+    if (!editText.trim()) {
+      return;
+    }
+    try {
+      const announcementDoc = doc(db, 'announcements', id);
+      await updateDoc(announcementDoc, { text: editText });
+      setAnnouncements(announcements.map(a => a.id === id ? { ...a, text: editText } : a));
+      setEditId(null);
+      setEditText('');
+    } catch (error) {
+      alert(`Error editing announcement: ${error.message}`);
+    }
+  };
+
+  const handleDeleteAnnouncement = async (id) => {
+    try {
+      const announcementDoc = doc(db, 'announcements', id);
+      await deleteDoc(announcementDoc);
+      setAnnouncements(announcements.filter(a => a.id !== id));
+    } catch (error) {
+      alert(`Error deleting announcement: ${error.message}`);
+    }
+  };
+
   if (loading) {
-    return <div>Loading...</div>;
+    return <LoadingIndicator />;
   }
 
   if (!user) {
@@ -147,7 +153,7 @@ function AnnouncementsManager() {
       />
       <button
         onClick={handleAddAnnouncement}
-        className="mt-4 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors"
+        className="mt-4 bg-[rgb(130,88,18)] text-white py-2 px-4 rounded-md hover:bg-[rgb(110,68,0)] transition-colors"
       >
         Add Announcement
       </button>
@@ -159,16 +165,39 @@ function AnnouncementsManager() {
         ) : (
           <div className="space-y-4">
             {announcements.map((item) => (
-              <div key={item.id} className="border-l-4 border-blue-500 pl-4 py-2">
-                <p className="text-gray-800">{item.text}</p>
-                <p className="text-sm text-gray-500 mt-1">
-                  Posted by: {item.createdBy} on {new Date(item.timestamp).toLocaleDateString()}
-                </p>
+              <div key={item.id} className="border-l-4 border-[rgb(130,88,18)] pl-4 py-2">
+                {editId === item.id ? (
+                  <>
+                    <textarea
+                      value={editText}
+                      onChange={(e) => setEditText(e.target.value)}
+                      className="mt-1 block w-full rounded-md"
+                    />
+                    <button onClick={() => handleEditAnnouncement(item.id)} className="mt-2 bg-[rgb(130,88,18)] text-white py-2 px-4 rounded-md hover:bg-[rgb(110,68,0)] transition-colors">Save</button>
+                    <button onClick={() => setEditId(null)} className="mt-2 bg-gray-600 text-white px-4 py-2 rounded">Cancel</button>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-gray-800">{item.text}</p>
+                    <p className="text-sm text-gray-500 mt-1">
+                      Posted by: {item.createdBy} on {new Date(item.timestamp).toLocaleDateString()}
+                    </p>
+                    <button onClick={() => { setEditId(item.id); setEditText(item.text); }} className="mt-2 bg-[rgb(130,88,18)] text-white py-2 px-4 rounded-md hover:bg-[rgb(110,68,0)] transition-colors mr-2">Edit</button>
+                    <button onClick={() => handleDeleteAnnouncement(item.id)} className="mt-2 bg-red-600 text-white px-4 py-2 rounded">Delete</button>
+                  </>
+                )}
               </div>
             ))}
           </div>
         )}
       </div>
+      <div className="relative">
+        {loading && (
+          <div className="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center">
+            <LoadingIndicator />
+          </div>
+        )}
+        </div>
     </section>
   );
 }
