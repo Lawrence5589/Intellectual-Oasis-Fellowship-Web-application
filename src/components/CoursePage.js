@@ -222,8 +222,66 @@ function CoursePage() {
       return <LoadingIndicator />;
     }
 
-    return (
-      <div className={`bg-white rounded-lg shadow-lg overflow-hidden relative p-4 w-full md:w-72 lg:w-80 h-auto ${course.status === 'coming_soon' ? 'grayscale' : ''}`}>
+    // Mobile view
+    const MobileView = () => (
+      <div className={`md:hidden bg-white rounded-lg shadow p-3 ${course.status === 'coming_soon' ? 'grayscale' : ''}`}>
+        <div className="flex items-center space-x-3">
+          <img src="/images/rcourses.png" alt={course.title} className="w-16 h-16 object-cover rounded" />
+          <div className="flex-1">
+            <h3 className="font-semibold text-gray-800 line-clamp-1">{course.title}</h3>
+            {isEnrolled && (
+              <div className="mt-1">
+                <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div
+                    className="bg-[rgb(130,88,18)] h-2 rounded-full transition-all duration-300"
+                    style={{ width: `${courseProgress}%` }}
+                  />
+                </div>
+                <p className="text-xs text-gray-600 mt-1">{Math.round(courseProgress)}% Complete</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="mt-3 flex justify-between gap-2">
+          {course.status === 'coming_soon' ? (
+            <button
+              disabled
+              className="w-full bg-gray-400 text-white px-3 py-1.5 rounded text-sm cursor-not-allowed"
+            >
+              Coming Soon
+            </button>
+          ) : (
+            <>
+              <button
+                onClick={handleLearnClick}
+                className="flex-1 bg-[rgb(130,88,18)] text-white px-3 py-1.5 rounded text-sm"
+              >
+                {isEnrolled ? (courseProgress === 100 ? 'Review' : 'Continue') : 'Enroll'}
+              </button>
+              <button
+                onClick={toggleDetails}
+                className="flex-1 bg-[rgb(130,88,18)] text-white px-3 py-1.5 rounded text-sm"
+              >
+                {courseProgress === 100 ? "Certificate" : "Details"}
+              </button>
+            </>
+          )}
+        </div>
+
+        {showDetails && courseProgress !== 100 && (
+          <div className="mt-3 text-sm text-gray-700 border-t pt-3">
+            <p className="mb-1"><strong>Difficulty:</strong> {course.difficulty}</p>
+            <p className="mb-1"><strong>Prerequisites:</strong> {course.prerequisites}</p>
+            <p className="line-clamp-2"><strong>Objectives:</strong> {course.learningObjectives}</p>
+          </div>
+        )}
+      </div>
+    );
+
+    // Desktop view (existing card view)
+    const DesktopView = () => (
+      <div className={`hidden md:block bg-white rounded-lg shadow-lg overflow-hidden relative p-4 w-full md:w-72 lg:w-80 h-auto ${course.status === 'coming_soon' ? 'grayscale' : ''}`}>
         {course.status === 'coming_soon' && (
           <div className="absolute top-4 right-4 bg-gray-800 text-white px-3 py-1 rounded-full z-20">
             Coming Soon
@@ -352,6 +410,13 @@ function CoursePage() {
           </Modal>
         )}
       </div>
+    );
+
+    return (
+      <>
+        <MobileView />
+        <DesktopView />
+      </>
     );
   };
 

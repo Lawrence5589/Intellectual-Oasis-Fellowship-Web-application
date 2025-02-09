@@ -13,32 +13,66 @@ function CoursePresentation() {
     useEffect(() => {
         const fetchPresentation = async () => {
             try {
+                console.log('Fetching with params:', { courseId, moduleTitle, subCourseId });
                 const courseDoc = doc(db, 'courses', courseId);
                 const courseSnapshot = await getDoc(courseDoc);
-    
+
                 if (courseSnapshot.exists()) {
                     const courseData = courseSnapshot.data();
-                    // Find the module that contains our subCourse
-                    const module = courseData.modules.find(m => m.moduleId === moduleTitle);
+                    const module = courseData.modules?.find(m => m.moduleId === moduleTitle);
                     
                     if (module && module.subCourses) {
-                        // Find the specific subCourse using subCourseId
-                        const subCourse = module.subCourses.find(sc => sc.subCourseId === subCourseId);
-                        
+                        const subCourseParts = subCourseId.split('.');
+                        const subCourseIndex = parseInt(subCourseParts[1]) - 1;
+                        const subCourse = module.subCourses[subCourseIndex];
+
                         if (subCourse && subCourse.presentationLink) {
-                            setPresentationData(subCourse.presentationLink);
-                            setSourceType(determineSourceType(subCourse.presentationLink));
+                            let cleanLink = subCourse.presentationLink;
+                            
+                            // Remove quotes and extract just the URL part
+                            cleanLink = cleanLink.replace(/["']/g, '').split(' title=')[0];
+                            
+                            // Handle YouTube links
+                            if (cleanLink.includes('youtube.com') || cleanLink.includes('youtu.be')) {
+                                if (!cleanLink.includes('embed')) {
+                                    const videoId = cleanLink.includes('youtu.be') 
+                                        ? cleanLink.split('youtu.be/')[1]
+                                        : cleanLink.split('v=')[1]?.split('&')[0];
+                                    cleanLink = `https://www.youtube.com/embed/${videoId}`;
+                                }
+                            }
+                            
+                            // Handle Google Slides links
+                            if (cleanLink.includes('docs.google.com/presentation')) {
+                                if (!cleanLink.includes('/embed')) {
+                                    cleanLink = cleanLink.replace('/pub', '/embed');
+                                    if (!cleanLink.includes('?')) {
+                                        cleanLink += '?';
+                                    }
+                                    if (!cleanLink.includes('start=true')) {
+                                        cleanLink += '&start=true&loop=false&delayms=3000';
+                                    }
+                                }
+                            }
+
+                            console.log('Cleaned presentation link:', cleanLink);
+                            setPresentationData(cleanLink);
+                            setSourceType(determineSourceType(cleanLink));
                         } else {
-                            console.error('No presentation link found for this sub-course');
+                            console.error('No presentation link found in subCourse:', subCourse);
+                            setPresentationData(null);
                         }
                     } else {
-                        console.error('Module or subCourses not found');
+                        console.error('Module not found with ID:', moduleTitle);
+                        setPresentationData(null);
                     }
                 } else {
-                    console.error('Course does not exist');
+                    console.error('Course does not exist:', courseId);
+                    setPresentationData(null);
                 }
             } catch (error) {
                 console.error('Error fetching presentation:', error);
+                setPresentationData(null);
             } finally {
                 setLoading(false);
             }

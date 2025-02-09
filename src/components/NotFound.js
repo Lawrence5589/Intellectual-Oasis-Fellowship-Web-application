@@ -13,7 +13,7 @@ function NotFound() {
           The page you're looking for doesn't exist or has been moved.
         </p>
         <button
-          onClick={() => navigate('/')}
+          onClick={() => navigate('/dashboard')}
           className="bg-[rgb(130,88,18)] text-white px-6 py-2 rounded-lg hover:bg-[rgb(110,68,0)] transition-colors"
         >
           Go Home
