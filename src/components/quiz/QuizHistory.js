@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { collection, query, where, getDocs, deleteDoc, doc, Timestamp, limit, startAfter, orderBy, addDoc } from 'firebase/firestore';
-import { db, auth } from '../../firebaseConfig';
+import { db, auth } from '../config/firebaseConfig';
 import { FiShare2, FiTrash2, FiUsers, FiClock, FiBarChart2, FiBook, FiCalendar, FiChevronLeft, FiChevronRight, FiAward } from 'react-icons/fi';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from '../contexts/AuthContext';
 import { onAuthStateChanged } from 'firebase/auth';
 import { useNavigate } from 'react-router-dom';
 import LeaderboardModal from './LeaderboardModal';

@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import { doc, getDoc, collection, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
-import { db } from '../../firebaseConfig';
-import { useAuth } from '../../contexts/AuthContext';
+import { db } from '../config/firebaseConfig';
+import { useAuth } from '../contexts/AuthContext';
 import { FiAward, FiClock, FiBarChart2, FiStar } from 'react-icons/fi';
 
 function QuizResults() {

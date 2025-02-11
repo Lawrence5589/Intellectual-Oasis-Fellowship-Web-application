@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
-import { db } from '../../firebaseConfig';
-import { useAuth } from '../../contexts/AuthContext';
+import { db } from '../config/firebaseConfig';
+import { useAuth } from '../contexts/AuthContext';
 
 function Quiz() {
   const { quizId } = useParams();
