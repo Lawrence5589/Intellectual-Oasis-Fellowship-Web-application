@@ -10,7 +10,8 @@ import {
   GoogleAuthProvider,
   signInWithPopup,
   signInWithRedirect,
-  getRedirectResult
+  getRedirectResult,
+  onAuthStateChanged
 } from 'firebase/auth';
 
 function PublicQuizEntry() {
@@ -28,84 +29,71 @@ function PublicQuizEntry() {
   const [loading, setLoading] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
   const [authCompleted, setAuthCompleted] = useState(false);
+  const [authChecked, setAuthChecked] = useState(false);
 
-  // Handle redirect result first
+  // Add auth state listener
   useEffect(() => {
-    const handleRedirectResult = async () => {
-      try {
-        const result = await getRedirectResult(auth);
-        if (result?.user) {
-          console.log('Google Sign-in successful:', result.user.uid);
-          setAuthCompleted(true);
-        }
-      } catch (error) {
-        console.error('Redirect Error:', error);
-        setError('Failed to complete sign in. Please try again.');
-      } finally {
-        setLoading(false);
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      console.log('Auth state changed:', user?.uid);
+      setAuthChecked(true);
+      setLoading(false);
+      
+      if (user) {
+        handleAuthorizedUser(user);
       }
-    };
+    });
 
-    handleRedirectResult();
+    return () => unsubscribe();
   }, []);
 
-  // Handle participant creation and navigation after authentication
-  useEffect(() => {
-    const createParticipantAndRedirect = async () => {
-      if (!currentUser || !authCompleted || isProcessing) return;
+  const handleAuthorizedUser = async (user) => {
+    try {
+      setLoading(true);
+      
+      // Check if quiz exists
+      const quizRef = doc(db, 'quizzes', quizId);
+      const quizDoc = await getDoc(quizRef);
 
-      try {
-        setIsProcessing(true);
-        console.log('Creating participant for:', currentUser.uid);
-
-        // Check if quiz exists
-        const quizRef = doc(db, 'quizzes', quizId);
-        const quizDoc = await getDoc(quizRef);
-
-        if (!quizDoc.exists()) {
-          throw new Error('Quiz not found');
-        }
-
-        // Check for existing participant
-        const participantsRef = collection(db, 'public-quiz-participants');
-        const q = query(
-          participantsRef,
-          where('quizId', '==', quizId),
-          where('userId', '==', currentUser.uid)
-        );
-
-        const participantSnapshot = await getDocs(q);
-        let participantId;
-
-        if (!participantSnapshot.empty) {
-          participantId = participantSnapshot.docs[0].id;
-          console.log('Found existing participant:', participantId);
-        } else {
-          const newParticipantRef = await addDoc(participantsRef, {
-            quizId,
-            userId: currentUser.uid,
-            fullName: currentUser.displayName || formData.fullName || 'Anonymous',
-            email: currentUser.email,
-            startedAt: new Date(),
-            authProvider: currentUser.providerData[0]?.providerId || 'email'
-          });
-          participantId = newParticipantRef.id;
-          console.log('Created new participant:', participantId);
-        }
-
-        const quizUrl = `/take-quiz/${quizId}?participant=${participantId}&type=public`;
-        console.log('Navigating to:', quizUrl);
-        await navigate(quizUrl, { replace: true });
-
-      } catch (error) {
-        console.error('Error:', error);
-        setError(error.message || 'Failed to start quiz. Please try again.');
-        setIsProcessing(false);
+      if (!quizDoc.exists()) {
+        throw new Error('Quiz not found');
       }
-    };
 
-    createParticipantAndRedirect();
-  }, [currentUser, authCompleted, quizId, navigate, isProcessing, formData.fullName]);
+      // Check for existing participant
+      const participantsRef = collection(db, 'public-quiz-participants');
+      const q = query(
+        participantsRef,
+        where('quizId', '==', quizId),
+        where('userId', '==', user.uid)
+      );
+
+      const participantSnapshot = await getDocs(q);
+      let participantId;
+
+      if (!participantSnapshot.empty) {
+        participantId = participantSnapshot.docs[0].id;
+        console.log('Found existing participant:', participantId);
+      } else {
+        const newParticipantRef = await addDoc(participantsRef, {
+          quizId,
+          userId: user.uid,
+          fullName: user.displayName || 'Anonymous',
+          email: user.email,
+          startedAt: new Date(),
+          authProvider: user.providerData[0]?.providerId || 'email'
+        });
+        participantId = newParticipantRef.id;
+        console.log('Created new participant:', participantId);
+      }
+
+      const quizUrl = `/take-quiz/${quizId}?participant=${participantId}&type=public`;
+      console.log('Navigating to:', quizUrl);
+      window.location.href = quizUrl;
+    } catch (error) {
+      console.error('Error:', error);
+      setError(error.message || 'Failed to start quiz. Please try again.');
+      setLoading(false);
+    }
+  };
 
   const handleGoogleSignIn = async () => {
     if (!formData.consent) {
@@ -169,13 +157,41 @@ function PublicQuizEntry() {
     }
   };
 
-  // Show loading state while checking authentication
-  if (loading) {
+  // Show loading state until auth is checked
+  if (!authChecked || loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[rgb(130,88,18)] mx-auto"></div>
           <p className="mt-4 text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // If there's an error, show it
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center text-red-600">
+          <p>{error}</p>
+        </div>
+      </div>
+    );
+  }
+
+  // If no user is logged in, redirect to login
+  if (!currentUser && authChecked) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <p className="mb-4">Please log in to take the quiz</p>
+          <button
+            onClick={() => navigate('/login')}
+            className="bg-[rgb(130,88,18)] text-white px-6 py-2 rounded-full hover:bg-[rgb(110,68,0)] transition-colors duration-300"
+          >
+            Log In
+          </button>
         </div>
       </div>
     );
@@ -230,6 +246,7 @@ function PublicQuizEntry() {
 
           <form className="space-y-6" onSubmit={handleSubmit}>
             <div className="rounded-md shadow-sm space-y-4">
+              {/* Google Sign In Button */}
               {isNewUser && (
                 <div>
                   <label htmlFor="fullName" className="block text-sm font-medium text-gray-700">

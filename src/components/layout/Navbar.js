@@ -10,39 +10,34 @@ function Navbar() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const { user } = useAuth();
   const navigate = useNavigate();
-  const isHomePage = location.pathname === '/';
-  const [showNavbar, setShowNavbar] = useState(!isHomePage);
+  const isLandingPage = location.pathname === '/';
 
   useEffect(() => {
     const handleScroll = () => {
       const scrollPosition = window.scrollY;
-      const windowHeight = window.innerHeight;
       
-      if (isHomePage) {
-        // Show navbar after scrolling past hero section
-        setShowNavbar(scrollPosition > windowHeight * 0.8);
-        // Add background only when scrolled
-        setIsScrolled(scrollPosition > windowHeight * 0.8);
+      if (isLandingPage) {
+        // On landing page, show navbar after scrolling past hero section
+        setIsScrolled(scrollPosition > window.innerHeight * 0.8);
       } else {
-        // Always show navbar on other pages
-        setShowNavbar(true);
-        // Add background when scrolled
+        // On other pages, add background when scrolled slightly
         setIsScrolled(scrollPosition > 20);
       }
     };
 
     window.addEventListener('scroll', handleScroll);
-    // Initial check
-    handleScroll();
+    handleScroll(); // Initial check
     
     return () => window.removeEventListener('scroll', handleScroll);
-  }, [isHomePage]);
+  }, [isLandingPage]);
 
+  // Close mobile menu on route change
   useEffect(() => {
     setIsMobileMenuOpen(false);
   }, [location]);
 
-  if (!showNavbar && isHomePage) return null;
+  // Hide navbar on landing page until scrolled
+  if (isLandingPage && !isScrolled) return null;
 
   return (
     <motion.nav

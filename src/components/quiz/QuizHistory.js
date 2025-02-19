@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { collection, query, where, getDocs, deleteDoc, doc, Timestamp, limit, startAfter, orderBy, addDoc } from 'firebase/firestore';
 import { db, auth } from '../config/firebaseConfig';
-import { FiShare2, FiTrash2, FiUsers, FiClock, FiBarChart2, FiBook, FiCalendar, FiChevronLeft, FiChevronRight, FiAward } from 'react-icons/fi';
+import { FiShare2, FiTrash2, FiUsers, FiClock, FiBarChart2, FiBook, FiCalendar, FiChevronLeft, FiChevronRight, FiAward, FiX } from 'react-icons/fi';
 import { useAuth } from '../contexts/AuthContext';
 import { onAuthStateChanged } from 'firebase/auth';
 import { useNavigate } from 'react-router-dom';
@@ -10,30 +10,20 @@ import LeaderboardModal from './LeaderboardModal';
 function QuizHistory() {
   const { currentUser } = useAuth();
   const [quizzes, setQuizzes] = useState([]);
-  const [selectedQuiz, setSelectedQuiz] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [participants, setParticipants] = useState({});
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState('date');
   const [error, setError] = useState('');
-  const [user, setUser] = useState(null);
-  const [pageSize] = useState(5);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(0);
-  
-  // Add missing state variables
+  const [pageSize] = useState(10);
   const [lastVisible, setLastVisible] = useState(null);
   const [hasMore, setHasMore] = useState(true);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const [indexBuilding, setIndexBuilding] = useState(false);
+  const [selectedQuiz, setSelectedQuiz] = useState(null);
+  const [showDetails, setShowDetails] = useState(false);
   const navigate = useNavigate();
-  const [showLeaderboard, setShowLeaderboard] = useState(false);
-  const [leaderboard, setLeaderboard] = useState([]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       console.log('Auth state changed:', user?.uid);
-      setUser(user);
       if (user) {
         loadQuizzes();
       } else {
@@ -60,7 +50,7 @@ function QuizHistory() {
         quizzesRef, 
         where('createdBy', '==', userId),
         orderBy('createdAt', 'desc'),
-        limit(pageSize * 2) // Fetch more data to check if there are more pages
+        limit(pageSize)
       );
 
       if (isNextPage && lastVisible) {
@@ -69,7 +59,7 @@ function QuizHistory() {
           where('createdBy', '==', userId),
           orderBy('createdAt', 'desc'),
           startAfter(lastVisible),
-          limit(pageSize * 2)
+          limit(pageSize)
         );
       }
       
@@ -83,64 +73,65 @@ function QuizHistory() {
 
       setLastVisible(quizzesSnap.docs[quizzesSnap.docs.length - 1]);
       
-      const newQuizData = quizzesSnap.docs
-        .filter(doc => doc.data().createdBy === userId)
-        .map(doc => {
-          const data = doc.data();
-          return {
-            id: doc.id,
-            ...data,
-            quizName: data.quizName || data.setTitle || 'Untitled Quiz',
-            subject: data.subject || 'No Subject',
-            topic: data.topic || 'No Topic',
-            timeLimit: data.timeLimit || 15,
-            questionCount: data.questions?.length || 0,
-            createdAt: data.createdAt instanceof Timestamp 
-              ? data.createdAt.toDate() 
-              : new Date(data.createdAt || Date.now())
-          };
-        });
+      const newQuizData = await Promise.all(quizzesSnap.docs.map(async (doc) => {
+        const data = doc.data();
+        const participantsData = await loadParticipants(doc.id);
+        
+        return {
+          id: doc.id,
+          ...data,
+          quizName: data.quizName || data.setTitle || 'Untitled Quiz',
+          subject: data.subject || 'No Subject',
+          topic: data.topic || 'No Topic',
+          timeLimit: data.timeLimit || 15,
+          questionCount: data.questions?.length || 0,
+          createdAt: data.createdAt instanceof Timestamp 
+            ? data.createdAt.toDate() 
+            : new Date(data.createdAt || Date.now()),
+          participants: participantsData
+        };
+      }));
 
-      // Set hasMore based on whether we got more items than pageSize
-      setHasMore(newQuizData.length > pageSize);
-      
-      // Only take pageSize number of items
-      const paginatedData = newQuizData.slice(0, pageSize);
-      
-      setQuizzes(prev => isNextPage ? [...prev, ...paginatedData] : paginatedData);
-      setIndexBuilding(false);
-
-      // Load participants for each quiz
-      for (const quiz of paginatedData) {
-        await loadParticipants(quiz.id);
-      }
+      setQuizzes(prev => isNextPage ? [...prev, ...newQuizData] : newQuizData);
+      setHasMore(newQuizData.length === pageSize);
 
     } catch (error) {
       console.error('Error in loadQuizzes:', error);
       setError('Failed to load quizzes. Please try again.');
     } finally {
       setLoading(false);
-      setIsLoadingMore(false);
     }
   };
 
   const loadParticipants = async (quizId) => {
     try {
       const participantsRef = collection(db, 'public-quiz-participants');
-      const q = query(participantsRef, where('quizId', '==', quizId));
+      const q = query(
+        participantsRef, 
+        where('quizId', '==', quizId)
+      );
+      
       const participantsSnap = await getDocs(q);
+      console.log(`Found ${participantsSnap.size} participants for quiz ${quizId}`);
       
-      console.log(`Participants for quiz ${quizId}:`, participantsSnap.size);
-      
-      setParticipants(prev => ({
-        ...prev,
-        [quizId]: participantsSnap.docs.map(doc => ({
+      const participants = participantsSnap.docs.map(doc => {
+        const data = doc.data();
+        return {
           id: doc.id,
-          ...doc.data()
-        }))
-      }));
+          ...data,
+          startedAt: data.startedAt?.toDate(),
+          completedAt: data.completedAt?.toDate(),
+          timeTaken: data.completedAt && data.startedAt ? 
+            Math.round((data.completedAt.toDate() - data.startedAt.toDate()) / 1000) : 
+            null
+        };
+      });
+
+      console.log('Processed participants:', participants);
+      return participants;
     } catch (error) {
       console.error('Error loading participants:', error);
+      return [];
     }
   };
 
@@ -161,13 +152,6 @@ function QuizHistory() {
     alert('Quiz link copied to clipboard!');
   };
 
-  const getAverageScore = (quizId) => {
-    const quizParticipants = participants[quizId] || [];
-    if (quizParticipants.length === 0) return 0;
-    const totalScore = quizParticipants.reduce((sum, p) => sum + (p.score || 0), 0);
-    return (totalScore / quizParticipants.length).toFixed(1);
-  };
-
   const sortQuizzes = (quizList) => {
     switch (sortBy) {
       case 'name':
@@ -176,7 +160,7 @@ function QuizHistory() {
         );
       case 'participants':
         return [...quizList].sort((a, b) => 
-          (participants[b.id]?.length || 0) - (participants[a.id]?.length || 0)
+          (b.participants?.length || 0) - (a.participants?.length || 0)
         );
       case 'date':
       default:
@@ -193,350 +177,273 @@ function QuizHistory() {
     return sortQuizzes(filtered);
   };
 
-  const getCurrentPageItems = () => {
-    const filteredAndSorted = getFilteredAndSortedQuizzes();
-    const startIndex = (currentPage - 1) * pageSize;
-    const endIndex = startIndex + pageSize;
-    return filteredAndSorted.slice(startIndex, endIndex);
-  };
+  const renderQuizRow = (quiz) => {
+    const totalParticipants = quiz.participants?.length || 0;
+    const completedParticipants = quiz.participants?.filter(p => p.completed) || [];
+    const averageScore = completedParticipants.length > 0 
+      ? Math.round(completedParticipants.reduce((sum, p) => sum + (p.score || 0), 0) / completedParticipants.length)
+      : 0;
 
-  const handleTakeQuiz = async (quizId) => {
-    console.log('Take Quiz button clicked for quiz ID:', quizId);
-    
-    if (!auth.currentUser) {
-      console.error('No authenticated user found');
-      setError('Please log in to take the quiz');
-      return;
-    }
-
-    try {
-      console.log('Creating participant record...');
-      const participantsRef = collection(db, 'public-quiz-participants');
-      
-      // Check if participant already exists
-      const existingParticipantQuery = query(
-        participantsRef,
-        where('quizId', '==', quizId),
-        where('userId', '==', auth.currentUser.uid)
-      );
-      
-      const existingParticipants = await getDocs(existingParticipantQuery);
-      let participantId;
-
-      if (!existingParticipants.empty) {
-        participantId = existingParticipants.docs[0].id;
-        console.log('Found existing participant:', participantId);
-      } else {
-        const newParticipantRef = await addDoc(participantsRef, {
-          quizId,
-          userId: auth.currentUser.uid,
-          fullName: auth.currentUser.displayName || 'Anonymous',
-          email: auth.currentUser.email,
-          startedAt: new Date(),
-          authProvider: auth.currentUser.providerData[0]?.providerId || 'email',
-          completed: false // Add this to track completion status
-        });
-        participantId = newParticipantRef.id;
-        console.log('Created new participant:', participantId);
-      }
-
-      const quizUrl = `/take-quiz/${quizId}?participant=${participantId}&type=public`;
-      console.log('Attempting navigation to:', quizUrl);
-      
-      // Force a hard navigation if needed
-      window.location.href = quizUrl;
-      
-      // Backup navigation using navigate
-      // setTimeout(() => {
-      //   navigate(quizUrl, { replace: true });
-      // }, 100);
-
-    } catch (error) {
-      console.error('Error in handleTakeQuiz:', error);
-      setError('Failed to start quiz. Please try again.');
-    }
-  };
-
-  const fetchLeaderboard = async (quizId) => {
-    setLoading(true);
-    try {
-      const participantsRef = collection(db, 'public-quiz-participants');
-      const leaderboardQuery = query(
-        participantsRef,
-        where('quizId', '==', quizId),
-        where('completed', '==', true),
-        orderBy('score', 'desc'),
-        limit(50)
-      );
-
-      const leaderboardDocs = await getDocs(leaderboardQuery);
-      
-      // Process leaderboard to get unique users with best scores
-      const uniqueUserScores = new Map();
-      leaderboardDocs.forEach(doc => {
-        const data = doc.data();
-        const existingEntry = uniqueUserScores.get(data.userId);
-        
-        if (!existingEntry || 
-            (data.score > existingEntry.score || 
-             (data.score === existingEntry.score && 
-              data.completedAt.toDate() - data.startedAt.toDate() < 
-              existingEntry.completedAt.toDate() - existingEntry.startedAt.toDate()))) {
-          uniqueUserScores.set(data.userId, {
-            ...data,
-            timeTaken: (data.completedAt.toDate() - data.startedAt.toDate()) / 1000,
-            id: doc.id
-          });
-        }
-      });
-
-      // Convert to array, sort, and take top 5
-      const topScores = Array.from(uniqueUserScores.values())
-        .sort((a, b) => {
-          if (b.score !== a.score) return b.score - a.score;
-          return a.timeTaken - b.timeTaken;
-        })
-        .slice(0, 5);
-
-      setLeaderboard(topScores);
-      setShowLeaderboard(true);
-    } catch (error) {
-      console.error('Error fetching leaderboard:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (quizzes.length > 0) {
-      const filteredQuizzes = getFilteredAndSortedQuizzes();
-      setTotalPages(Math.ceil(filteredQuizzes.length / pageSize));
-    }
-  }, [quizzes, searchTerm, sortBy, pageSize]);
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[200px]">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[rgb(130,88,18)]"></div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-6 p-2 sm:p-4 max-w-7xl mx-auto">
-      {error && (
-        <div className={`border px-4 py-3 rounded relative ${
-          indexBuilding 
-            ? 'bg-blue-100 border-blue-400 text-blue-700' 
-            : 'bg-red-100 border-red-400 text-red-700'
-        }`}>
-          <span className="block sm:inline">{error}</span>
-        </div>
-      )}
-
-      <div className="flex flex-col space-y-4">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div>
-            <h2 className="text-2xl font-bold text-gray-800">Your Quizzes</h2>
-            {auth.currentUser && (
-              <div className="text-sm text-gray-600">
-                <p>Email: {auth.currentUser.email}</p>
-                <p>Total Quizzes: {quizzes.length}</p>
-              </div>
-            )}
+    // Mobile view (under 768px)
+    if (window.innerWidth < 768) {
+      return (
+        <div key={quiz.id} className="bg-white p-3 rounded-lg shadow-sm mb-3 border">
+          <div className="flex justify-between items-start mb-2">
+            <div className="font-medium">{quiz.quizName}</div>
+            <div className="flex space-x-2">
+              <button
+                onClick={() => {
+                  setSelectedQuiz(quiz);
+                  setShowDetails(true);
+                }}
+                className="p-1 text-gray-600 hover:text-[rgb(130,88,18)]"
+                title="View Details"
+              >
+                <FiBarChart2 size={16} />
+              </button>
+              <button
+                onClick={() => shareQuiz(quiz.id)}
+                className="p-1 text-gray-600 hover:text-[rgb(130,88,18)]"
+                title="Share Quiz"
+              >
+                <FiShare2 size={16} />
+              </button>
+              <button
+                onClick={() => deleteQuiz(quiz.id)}
+                className="p-1 text-gray-600 hover:text-red-500"
+                title="Delete Quiz"
+              >
+                <FiTrash2 size={16} />
+              </button>
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-2 text-sm">
+            <div>
+              <span className="text-gray-500">Participants</span>
+              <div>{totalParticipants} ({completedParticipants.length})</div>
+            </div>
+            <div>
+              <span className="text-gray-500">Avg Score</span>
+              <div>{averageScore}%</div>
+            </div>
+            <div>
+              <span className="text-gray-500">Questions</span>
+              <div>{quiz.questionCount}</div>
+            </div>
+          </div>
+          <div className="text-xs text-gray-500 mt-2">
+            {new Date(quiz.createdAt).toLocaleDateString()}
           </div>
         </div>
+      );
+    }
 
-        <div className="flex flex-col sm:flex-row gap-3 w-full">
+    // Desktop view (768px and above)
+    return (
+      <tr key={quiz.id} className="border-b hover:bg-gray-50">
+        <td className="py-2 px-4">{quiz.quizName}</td>
+        <td className="py-2 px-4 text-center">
+          <div>
+            <span>{totalParticipants}</span>
+            <span className="text-xs text-gray-500 ml-1">
+              ({completedParticipants.length})
+            </span>
+          </div>
+        </td>
+        <td className="py-2 px-4 text-center">{averageScore}%</td>
+        <td className="py-2 px-4 text-center">{quiz.questionCount}</td>
+        <td className="py-2 px-4 text-center">
+          {new Date(quiz.createdAt).toLocaleDateString()}
+        </td>
+        <td className="py-2 px-4">
+          <div className="flex justify-end space-x-2">
+            <button
+              onClick={() => {
+                setSelectedQuiz(quiz);
+                setShowDetails(true);
+              }}
+              className="p-1 text-gray-600 hover:text-[rgb(130,88,18)]"
+              title="View Details"
+            >
+              <FiBarChart2 size={18} />
+            </button>
+            <button
+              onClick={() => shareQuiz(quiz.id)}
+              className="p-1 text-gray-600 hover:text-[rgb(130,88,18)]"
+              title="Share Quiz"
+            >
+              <FiShare2 size={18} />
+            </button>
+            <button
+              onClick={() => deleteQuiz(quiz.id)}
+              className="p-1 text-gray-600 hover:text-red-500"
+              title="Delete Quiz"
+            >
+              <FiTrash2 size={18} />
+            </button>
+          </div>
+        </td>
+      </tr>
+    );
+  };
+
+  const QuizDetailsModal = ({ quiz, onClose }) => {
+    if (!quiz) return null;
+
+    const completedParticipants = quiz.participants?.filter(p => p.completed) || [];
+    const averageScore = completedParticipants.length > 0 
+      ? Math.round(completedParticipants.reduce((sum, p) => sum + (p.score || 0), 0) / completedParticipants.length)
+      : 0;
+    const averageTime = completedParticipants.length > 0
+      ? Math.round(completedParticipants.reduce((sum, p) => sum + (p.timeTaken || 0), 0) / completedParticipants.length)
+      : 0;
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+          <div className="flex justify-between items-start mb-4">
+            <h3 className="text-xl font-semibold">{quiz.quizName}</h3>
+            <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
+              <FiX size={24} />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <StatBox icon={<FiUsers />} label="Total Participants" value={quiz.participants?.length || 0} />
+            <StatBox icon={<FiAward />} label="Average Score" value={`${averageScore}%`} />
+            <StatBox icon={<FiClock />} label="Average Time" 
+              value={`${Math.floor(averageTime / 60)}:${(averageTime % 60).toString().padStart(2, '0')}`} />
+            <StatBox icon={<FiBook />} label="Questions" value={quiz.questionCount} />
+          </div>
+
+          <div className="mt-6">
+            <h4 className="font-semibold mb-2">Participant Results</h4>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="bg-gray-50">
+                    <th className="py-2 px-4 text-left">Name</th>
+                    <th className="py-2 px-4 text-center">Score</th>
+                    <th className="py-2 px-4 text-center">Time</th>
+                    <th className="py-2 px-4 text-center">Date</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {quiz.participants?.map((participant) => (
+                    <tr key={participant.id} className="border-b">
+                      <td className="py-2 px-4">{participant.fullName || 'Anonymous'}</td>
+                      <td className="py-2 px-4 text-center">
+                        {participant.completed ? `${participant.score}%` : 'In Progress'}
+                      </td>
+                      <td className="py-2 px-4 text-center">
+                        {participant.timeTaken ? 
+                          `${Math.floor(participant.timeTaken / 60)}:${(participant.timeTaken % 60).toString().padStart(2, '0')}` : 
+                          '-'}
+                      </td>
+                      <td className="py-2 px-4 text-center">
+                        {participant.startedAt?.toLocaleDateString()}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const StatBox = ({ icon, label, value }) => (
+    <div className="bg-gray-50 p-3 rounded">
+      <div className="flex items-center space-x-2">
+        <span className="text-[rgb(130,88,18)]">{icon}</span>
+        <div>
+          <div className="text-xs text-gray-500">{label}</div>
+          <div className="font-semibold">{value}</div>
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="container mx-auto px-4 py-6">
+      <div className="mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <h2 className="text-xl font-bold text-gray-800">Quiz History</h2>
+        <div className="flex flex-col sm:flex-row gap-2">
           <input
             type="text"
             placeholder="Search quizzes..."
+            className="p-2 border rounded text-sm w-full sm:w-auto"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full sm:w-64 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[rgb(130,88,18)] focus:border-[rgb(130,88,18)] outline-none"
           />
-          
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value)}
-            className="w-full sm:w-auto px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[rgb(130,88,18)] focus:border-[rgb(130,88,18)] outline-none"
+            className="p-2 border rounded text-sm w-full sm:w-auto"
           >
-            <option value="date">Sort by Date</option>
-            <option value="name">Sort by Name</option>
-            <option value="participants">Sort by Participants</option>
+            <option value="date">Date</option>
+            <option value="name">Name</option>
+            <option value="participants">Participants</option>
           </select>
         </div>
       </div>
-      
-      {!auth.currentUser ? (
-        <div className="text-center py-8 bg-gray-50 rounded-lg">
-          <p className="text-gray-600">Please sign in to view your quizzes.</p>
+
+      {loading ? (
+        <div className="flex justify-center py-4">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[rgb(130,88,18)]"></div>
         </div>
-      ) : loading ? (
-        <div className="flex items-center justify-center min-h-[200px]">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[rgb(130,88,18)]"></div>
-        </div>
-      ) : quizzes.length === 0 ? (
-        <div className="text-center py-8 bg-gray-50 rounded-lg">
-          <p className="text-gray-600">
-            {searchTerm ? 'No quizzes match your search.' : 'You haven\'t created any quizzes yet.'}
-          </p>
-        </div>
+      ) : error ? (
+        <div className="text-red-500 text-center py-4">{error}</div>
       ) : (
         <>
-          <div className="overflow-x-auto -mx-2 sm:mx-0">
-            <table className="min-w-full bg-white rounded-lg overflow-hidden">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Quiz Name
-                  </th>
-                  <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">
-                    Subject
-                  </th>
-                  <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">
-                    Topic
-                  </th>
-                  <th className="px-2 sm:px-4 py-2 sm:py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-20">
-                    Users
-                  </th>
-                  <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">
-                    Created
-                  </th>
-                  <th className="px-2 sm:px-4 py-2 sm:py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {getCurrentPageItems().map(quiz => (
-                  <tr key={quiz.id} className="hover:bg-gray-50">
-                    <td className="px-2 sm:px-4 py-2 sm:py-3 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900 truncate max-w-[150px] sm:max-w-none">
-                        {quiz.quizName}
-                      </div>
-                      <div className="text-xs text-gray-500 sm:hidden truncate">
-                        {quiz.subject} - {quiz.topic}
-                      </div>
-                    </td>
-                    <td className="px-2 sm:px-4 py-2 sm:py-3 whitespace-nowrap hidden sm:table-cell">
-                      <div className="text-sm text-gray-500">{quiz.subject}</div>
-                    </td>
-                    <td className="px-2 sm:px-4 py-2 sm:py-3 whitespace-nowrap hidden sm:table-cell">
-                      <div className="text-sm text-gray-500">{quiz.topic}</div>
-                    </td>
-                    <td className="px-2 sm:px-4 py-2 sm:py-3 whitespace-nowrap text-center">
-                      <div className="text-sm text-gray-500">{participants[quiz.id]?.length || 0}</div>
-                    </td>
-                    <td className="px-2 sm:px-4 py-2 sm:py-3 whitespace-nowrap hidden sm:table-cell">
-                      <div className="text-sm text-gray-500">
-                        {quiz.createdAt.toLocaleDateString()}
-                      </div>
-                    </td>
-                    <td className="px-2 sm:px-4 py-2 sm:py-3 whitespace-nowrap text-right text-sm font-medium">
-                      <div className="flex justify-end space-x-1 sm:space-x-2">
-                        <button
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            console.log('Take Quiz button clicked - event prevented');
-                            handleTakeQuiz(quiz.id);
-                          }}
-                          className="flex items-center justify-center p-2 text-[rgb(130,88,18)] hover:text-[rgb(110,68,0)]"
-                          title="Take Quiz"
-                        >
-                          <FiBook className="w-4 h-4 sm:w-5 sm:h-5" />
-                          <span className="sr-only">Take Quiz</span>
-                        </button>
-                        <button
-                          onClick={() => shareQuiz(quiz.id)}
-                          className="text-[rgb(130,88,18)] hover:text-[rgb(110,68,0)]"
-                          title="Share Quiz"
-                        >
-                          <FiShare2 className="w-4 h-4 sm:w-5 sm:h-5" />
-                        </button>
-                        <button
-                          onClick={() => deleteQuiz(quiz.id)}
-                          className="text-red-500 hover:text-red-700"
-                          title="Delete Quiz"
-                        >
-                          <FiTrash2 className="w-4 h-4 sm:w-5 sm:h-5" />
-                        </button>
-                        <button
-                          onClick={() => fetchLeaderboard(quiz.id)}
-                          disabled={loading}
-                          className="text-[rgb(130,88,18)] hover:text-[rgb(110,68,0)]"
-                          title="View Leaderboard"
-                        >
-                          <FiAward className="w-4 h-4 sm:w-5 sm:h-5" />
-                        </button>
-                      </div>
-                    </td>
+          <div className="hidden md:block"> {/* Desktop view */}
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="bg-gray-50">
+                    <th className="py-2 px-4 text-left">Quiz Name</th>
+                    <th className="py-2 px-4 text-center">Participants</th>
+                    <th className="py-2 px-4 text-center">Avg Score</th>
+                    <th className="py-2 px-4 text-center">Questions</th>
+                    <th className="py-2 px-4 text-center">Created</th>
+                    <th className="py-2 px-4 text-right">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {getFilteredAndSortedQuizzes().map(renderQuizRow)}
+                </tbody>
+              </table>
+            </div>
           </div>
 
-          <div className="flex items-center justify-between border-t border-gray-200 bg-white px-4 py-3 sm:px-6">
-            <div className="flex flex-1 justify-between sm:hidden">
-              <button
-                onClick={() => setCurrentPage(prev => prev - 1)}
-                disabled={currentPage === 1}
-                className="relative inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-              >
-                Previous
-              </button>
-              <button
-                onClick={() => setCurrentPage(prev => prev + 1)}
-                disabled={currentPage === totalPages}
-                className="relative ml-3 inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-              >
-                Next
-              </button>
-            </div>
-            <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
-              <div>
-                <p className="text-sm text-gray-700">
-                  Showing <span className="font-medium">{((currentPage - 1) * pageSize) + 1}</span> to{' '}
-                  <span className="font-medium">{Math.min(currentPage * pageSize, quizzes.length)}</span> of{' '}
-                  <span className="font-medium">{quizzes.length}</span> results
-                </p>
-              </div>
-              <div>
-                <nav className="isolate inline-flex -space-x-px rounded-md shadow-sm" aria-label="Pagination">
-                  <button
-                    onClick={() => setCurrentPage(prev => prev - 1)}
-                    disabled={currentPage === 1}
-                    className="relative inline-flex items-center rounded-l-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50"
-                  >
-                    <span className="sr-only">Previous</span>
-                    <FiChevronLeft className="h-5 w-5" />
-                  </button>
-                  <span className="relative inline-flex items-center px-4 py-2 text-sm font-semibold text-gray-900 ring-1 ring-inset ring-gray-300 focus:outline-offset-0">
-                    Page {currentPage} of {totalPages}
-                  </span>
-                  <button
-                    onClick={() => setCurrentPage(prev => prev + 1)}
-                    disabled={currentPage === totalPages}
-                    className="relative inline-flex items-center rounded-r-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50"
-                  >
-                    <span className="sr-only">Next</span>
-                    <FiChevronRight className="h-5 w-5" />
-                  </button>
-                </nav>
-              </div>
+          <div className="md:hidden"> {/* Mobile view */}
+            <div className="space-y-3">
+              {getFilteredAndSortedQuizzes().map(renderQuizRow)}
             </div>
           </div>
+
+          {hasMore && (
+            <button
+              onClick={() => loadQuizzes(true)}
+              className="w-full mt-4 p-2 text-[rgb(130,88,18)] hover:bg-gray-50 rounded text-sm"
+            >
+              Load More
+            </button>
+          )}
+
+          {showDetails && (
+            <QuizDetailsModal
+              quiz={selectedQuiz}
+              onClose={() => {
+                setShowDetails(false);
+                setSelectedQuiz(null);
+              }}
+            />
+          )}
         </>
       )}
-
-      <LeaderboardModal
-        isOpen={showLeaderboard}
-        onClose={() => setShowLeaderboard(false)}
-        leaderboard={leaderboard}
-        currentUserId={auth.currentUser?.uid}
-      />
     </div>
   );
 }

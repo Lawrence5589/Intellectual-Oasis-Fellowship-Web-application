@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc, query, orderBy } from 'firebase/firestore';
 import { db } from '../config/firebaseConfig';
 import { useAuth } from '../contexts/AuthContext';
 import LoadingIndicator from '../common/LoadingIndicator';
@@ -32,49 +32,64 @@ function UserProgress() {
           return;
         }
 
-        const usersSnapshot = await getDocs(collection(db, 'users'));
+        // Get all users with their data
+        const usersQuery = query(collection(db, 'users'), orderBy('name'));
+        const usersSnapshot = await getDocs(usersQuery);
         const progressData = [];
 
+        // Process each user's data
         for (const userDoc of usersSnapshot.docs) {
           const userData = userDoc.data();
           
-          // Get enrolled courses
-          const courseProgressSnapshot = await getDocs(
-            collection(db, 'users', userDoc.id, 'courseProgress')
-          );
+          try {
+            // Get enrolled courses
+            const courseProgressQuery = query(
+              collection(db, 'users', userDoc.id, 'courseProgress')
+            );
+            const courseProgressSnapshot = await getDocs(courseProgressQuery);
 
-          // Get exam results
-          const examResultsSnapshot = await getDocs(
-            collection(db, 'users', userDoc.id, 'examResults')
-          );
+            // Get exam results
+            const examResultsQuery = query(
+              collection(db, 'users', userDoc.id, 'examResults'),
+              orderBy('timestamp', 'desc')
+            );
+            const examResultsSnapshot = await getDocs(examResultsQuery);
 
-          const examResults = examResultsSnapshot.docs.map(doc => doc.data());
-          
-          // Calculate statistics
-          const stats = {
-            enrolledCourses: courseProgressSnapshot.size,
-            totalExams: examResults.length,
-            passedExams: examResults.filter(result => result.score >= 75).length,
-            failedExams: examResults.filter(result => result.score < 75).length,
-            averageScore: examResults.length > 0 
-              ? (examResults.reduce((acc, curr) => acc + curr.score, 0) / examResults.length).toFixed(1)
-              : 0
-          };
+            const examResults = examResultsSnapshot.docs.map(doc => ({
+              ...doc.data(),
+              id: doc.id
+            }));
+            
+            // Calculate statistics
+            const stats = {
+              enrolledCourses: courseProgressSnapshot.size,
+              totalExams: examResults.length,
+              passedExams: examResults.filter(result => result.score >= 75).length,
+              failedExams: examResults.filter(result => result.score < 75).length,
+              averageScore: examResults.length > 0 
+                ? (examResults.reduce((acc, curr) => acc + curr.score, 0) / examResults.length).toFixed(1)
+                : 0
+            };
 
-          progressData.push({
-            id: userDoc.id,
-            name: userData.name || 'N/A',
-            email: userData.email,
-            lastActive: userData.lastLogin?.toDate() || null,
-            ...stats
-          });
+            progressData.push({
+              id: userDoc.id,
+              name: userData.name || 'N/A',
+              email: userData.email || 'N/A',
+              lastActive: userData.lastLogin ? new Date(userData.lastLogin.seconds * 1000) : null,
+              ...stats
+            });
+          } catch (err) {
+            console.error(`Error processing user ${userDoc.id}:`, err);
+            // Continue with next user instead of breaking the entire loop
+            continue;
+          }
         }
 
         setUsersProgress(progressData);
         setLoading(false);
       } catch (error) {
         console.error('Error fetching user progress:', error);
-        setError('Failed to fetch user progress data');
+        setError('Failed to fetch user progress data. Please try again.');
         setLoading(false);
       }
     };
@@ -106,17 +121,11 @@ function UserProgress() {
     currentPage * ITEMS_PER_PAGE
   );
 
-  const handlePageChange = (newPage) => {
-    if (newPage >= 1 && newPage <= totalPages) {
-      setCurrentPage(newPage);
-    }
-  };
-
   if (loading) return <LoadingIndicator />;
   if (error) return <div className="text-red-600 p-4">{error}</div>;
 
   return (
-    <section className="bg-white p-4 rounded-lg shadow">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-2xl font-semibold">User Progress Tracking</h2>
         <button
@@ -137,7 +146,7 @@ function UserProgress() {
         />
       </div>
 
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto bg-white rounded-lg shadow">
         <table id="progress-table" className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
@@ -173,7 +182,7 @@ function UserProgress() {
                   {user.averageScore}%
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {user.lastActive ? new Date(user.lastActive).toLocaleDateString() : 'Never'}
+                  {user.lastActive ? user.lastActive.toLocaleDateString() : 'Never'}
                 </td>
               </tr>
             ))}
@@ -192,7 +201,7 @@ function UserProgress() {
         </div>
         <div className="flex items-center space-x-2">
           <button
-            onClick={() => handlePageChange(currentPage - 1)}
+            onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
             disabled={currentPage === 1}
             className={`px-3 py-1 rounded ${
               currentPage === 1
@@ -205,7 +214,7 @@ function UserProgress() {
           {[...Array(totalPages)].map((_, index) => (
             <button
               key={index + 1}
-              onClick={() => handlePageChange(index + 1)}
+              onClick={() => setCurrentPage(index + 1)}
               className={`px-3 py-1 rounded ${
                 currentPage === index + 1
                   ? 'bg-[rgb(130,88,18)] text-white'
@@ -216,7 +225,7 @@ function UserProgress() {
             </button>
           ))}
           <button
-            onClick={() => handlePageChange(currentPage + 1)}
+            onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
             disabled={currentPage === totalPages}
             className={`px-3 py-1 rounded ${
               currentPage === totalPages
@@ -228,7 +237,7 @@ function UserProgress() {
           </button>
         </div>
       </div>
-    </section>
+    </div>
   );
 }
 

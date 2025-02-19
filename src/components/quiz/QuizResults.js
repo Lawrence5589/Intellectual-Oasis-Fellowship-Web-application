@@ -134,8 +134,9 @@ function QuizResults() {
 
   const calculateTimeTaken = (startTime, endTime) => {
     if (!startTime || !endTime) return 0;
-    const timeDiff = endTime.toDate() - startTime.toDate();
-    return Math.max(0, timeDiff / 1000); // Convert to seconds and ensure non-negative
+    const start = startTime.toDate();
+    const end = endTime.toDate();
+    return Math.round((end - start) / 1000); // Returns time in seconds
   };
 
   if (loading) {
@@ -190,12 +191,9 @@ function QuizResults() {
           </div>
           <div className="bg-gray-50 p-4 rounded-lg text-center">
             <FiClock className="w-6 h-6 mx-auto mb-2 text-[rgb(130,88,18)]" />
-            <div className="text-sm text-gray-600">Time Used</div>
+            <div className="text-sm text-gray-600">Time Taken</div>
             <div className="font-bold">
-              {formatTime(calculateTimeTaken(participant?.startedAt, participant?.completedAt))} 
-              <span className="text-sm text-gray-500 ml-1">
-                / {formatTime(quiz?.timeLimit * 60 || 0)}
-              </span>
+              {formatTime(calculateTimeTaken(participant?.startedAt, participant?.completedAt))}
             </div>
           </div>
         </div>

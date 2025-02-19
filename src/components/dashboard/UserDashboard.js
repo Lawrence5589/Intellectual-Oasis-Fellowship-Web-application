@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { db } from '../config/firebaseConfig';
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { collection, getDocs, query, where, limit, startAfter, getDoc, doc } from 'firebase/firestore';
 import CoursesTray from '../courses/CoursesTray';
 import EnrolledCourses from '../courses/EnrolledCourses';
 import QuizSection from './QuizSection';
@@ -18,8 +18,120 @@ function Dashboard() {
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [data, setData] = useState({
     enrolledCourses: [],
-    announcements: []
+    announcements: [],
+    lastAnnouncementDoc: null,
+    hasMoreAnnouncements: true
   });
+
+  // Cache key for local storage
+  const CACHE_KEY = `dashboard_${user?.uid}`;
+  const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+
+  const fetchFromCache = useCallback(() => {
+    const cached = localStorage.getItem(CACHE_KEY);
+    if (cached) {
+      const { data: cachedData, timestamp } = JSON.parse(cached);
+      if (Date.now() - timestamp < CACHE_DURATION) {
+        setData(prevData => ({ ...prevData, ...cachedData }));
+        return true;
+      }
+    }
+    return false;
+  }, [CACHE_KEY]);
+
+  const updateCache = useCallback((newData) => {
+    localStorage.setItem(CACHE_KEY, JSON.stringify({
+      data: newData,
+      timestamp: Date.now()
+    }));
+  }, [CACHE_KEY]);
+
+  // Parallel data fetching
+  const fetchDashboardData = useCallback(async () => {
+    if (!user) {
+      navigate('/login');
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      // Check cache first
+      if (fetchFromCache()) {
+        setLoading(false);
+        return;
+      }
+
+      // Parallel fetching of courses and announcements
+      const [enrolledCoursesData, announcementsData] = await Promise.all([
+        fetchEnrolledCourses(),
+        fetchAnnouncements()
+      ]);
+
+      const newData = {
+        enrolledCourses: enrolledCoursesData,
+        announcements: announcementsData.announcements,
+        lastAnnouncementDoc: announcementsData.lastDoc,
+        hasMoreAnnouncements: announcementsData.hasMore
+      };
+
+      setData(newData);
+      updateCache(newData);
+
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [user, navigate, fetchFromCache, updateCache]);
+
+  const fetchEnrolledCourses = async () => {
+    const enrolledRef = collection(db, 'users', user.uid, 'courseProgress');
+    const enrolledSnapshot = await getDocs(enrolledRef);
+    return enrolledSnapshot.docs.map(doc => ({
+      courseId: doc.id,
+      ...doc.data()
+    }));
+  };
+
+  const fetchAnnouncements = async (lastDoc = null) => {
+    const ANNOUNCEMENTS_PER_PAGE = 5;
+    let announcementsQuery = query(
+      collection(db, 'announcements'),
+      where('active', '==', true),
+      limit(ANNOUNCEMENTS_PER_PAGE)
+    );
+
+    if (lastDoc) {
+      announcementsQuery = query(
+        announcementsQuery,
+        startAfter(lastDoc)
+      );
+    }
+
+    const snapshot = await getDocs(announcementsQuery);
+    return {
+      announcements: snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })),
+      lastDoc: snapshot.docs[snapshot.docs.length - 1],
+      hasMore: snapshot.docs.length === ANNOUNCEMENTS_PER_PAGE
+    };
+  };
+
+  // Load more announcements
+  const loadMoreAnnouncements = async () => {
+    if (!data.hasMoreAnnouncements) return;
+
+    const moreAnnouncements = await fetchAnnouncements(data.lastAnnouncementDoc);
+    setData(prevData => ({
+      ...prevData,
+      announcements: [...prevData.announcements, ...moreAnnouncements.announcements],
+      lastAnnouncementDoc: moreAnnouncements.lastDoc,
+      hasMoreAnnouncements: moreAnnouncements.hasMore
+    }));
+  };
 
   useEffect(() => {
     const handleResize = () => {
@@ -31,49 +143,8 @@ function Dashboard() {
   }, []);
 
   useEffect(() => {
-    const fetchDashboardData = async () => {
-      if (!user) {
-        navigate('/login');
-        return;
-      }
-
-      try {
-        setLoading(true);
-        
-        // Fetch enrolled courses
-        const enrolledRef = collection(db, 'users', user.uid, 'courseProgress');
-        console.log('Fetching course progress for user:', user.uid);
-        const enrolledSnapshot = await getDocs(enrolledRef);
-        console.log('Course progress snapshot exists:', !enrolledSnapshot.empty);
-        const enrolledCourses = enrolledSnapshot.docs.map(doc => ({
-          courseId: doc.id,
-          ...doc.data()
-        }));
-        console.log('Fetched course progress:', enrolledCourses);
-
-        // Fetch announcements
-        const announcementsRef = collection(db, 'announcements');
-        const announcementsQuery = query(announcementsRef, where('active', '==', true));
-        const announcementsSnapshot = await getDocs(announcementsQuery);
-        const announcements = announcementsSnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
-
-        setData({
-          enrolledCourses,
-          announcements
-        });
-
-      } catch (error) {
-        console.error('Error fetching dashboard data:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchDashboardData();
-  }, [user, navigate]);
+  }, [fetchDashboardData]);
 
   const handleSignOut = async () => {
     try {
@@ -151,11 +222,11 @@ function Dashboard() {
               <h3 className="text-lg font-semibold mb-4">Quick Links</h3>
               <div className="grid grid-cols-2 gap-4">
                 <button 
-                  onClick={() => navigate('/forums')}
+                  onClick={() => navigate('/blog')}
                   className="p-4 bg-gray-50 rounded-lg flex flex-col items-center"
                 >
                   <span className="text-2xl mb-2">💭</span>
-                  <span className="text-sm">Forums</span>
+                  <span className="text-sm">Blog</span>
                 </button>
                 <button 
                   onClick={() => navigate('/resources')}
@@ -165,7 +236,7 @@ function Dashboard() {
                   <span className="text-sm">Resources</span>
                 </button>
                 <button 
-                  onClick={() => navigate('/settings')}
+                  onClick={() => navigate('/profile-settings')}
                   className="p-4 bg-gray-50 rounded-lg flex flex-col items-center"
                 >
                   <span className="text-2xl mb-2">⚙️</span>

@@ -16,7 +16,6 @@ function Quiz() {
   const [answers, setAnswers] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [timeLeft, setTimeLeft] = useState(null);
 
   console.log('Quiz render:', { quizId, participantId, currentUser: !!currentUser, loading, quiz: !!quiz });
 
@@ -37,10 +36,7 @@ function Quiz() {
         if (docSnap.exists()) {
           const quizData = docSnap.data();
           setQuiz(quizData);
-          // Set timer based on timeLimit from Firestore (in minutes)
-          // If timeLimit doesn't exist, fallback to 15 minutes
-          setTimeLeft((quizData.timeLimit || 15) * 60);
-          console.log('Timer set for:', quizData.timeLimit, 'minutes');
+          console.log('Quiz found');
         } else {
           console.log('Quiz not found');
           setError('Quiz not found');
@@ -76,12 +72,17 @@ function Quiz() {
 
       const finalScore = Math.round((score / quiz.questions.length) * 100);
 
+      // Get the participant's start time and calculate duration
+      const participantDoc = await getDoc(doc(db, 'public-quiz-participants', participantId));
+      const startTime = participantDoc.data().startedAt;
+      const completedAt = new Date();
+
       // Update participant record with completion time and score
       await updateDoc(doc(db, 'public-quiz-participants', participantId), {
         completed: true,
         score: finalScore,
         answers: answers,
-        completedAt: new Date()
+        completedAt: completedAt
       });
 
       // Navigate to results
@@ -90,30 +91,6 @@ function Quiz() {
       console.error('Error submitting quiz:', error);
       setError('Failed to submit quiz');
     }
-  };
-
-  // Timer effect
-  useEffect(() => {
-    if (timeLeft === null || timeLeft <= 0) return;
-
-    const timer = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          handleSubmit(); // Auto-submit when time runs out
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, [timeLeft]);
-
-  const formatTime = (seconds) => {
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = seconds % 60;
-    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
   };
 
   if (loading) {
@@ -145,9 +122,6 @@ function Quiz() {
       <div className="bg-white rounded-lg shadow p-6">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold">Question {currentQuestion + 1} of {quiz.questions.length}</h1>
-          <div className={`text-xl font-semibold ${timeLeft <= 60 ? 'text-red-500 animate-pulse' : ''}`}>
-            Time Left: {formatTime(timeLeft)}
-          </div>
         </div>
         
         <div className="mb-6">

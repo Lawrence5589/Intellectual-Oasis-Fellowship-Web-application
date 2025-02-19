@@ -276,7 +276,7 @@ function Certificate() {
                     <text x="50" y="65" textAnchor="middle" className="font-serif" fill="currentColor" fontSize="12">Verified</text>
                   </svg>
                 </div>
-                <p className="text-xs text-gray-600">Verify at iof.org/verify/{verificationId}</p>
+                <p className="text-xs text-gray-600">Verify at iofellowship.org/verify/{verificationId}</p>
                 <p className="text-[10px] text-gray-500">Certificate ID: {verificationId}</p>
               </div>
             </div>

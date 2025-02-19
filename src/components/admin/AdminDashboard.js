@@ -4,6 +4,7 @@ import UserManagement from './UserManagement';
 import UserProgress from './UserProgress';
 import CourseManagement from './CourseManagement';
 import QuizManagement from './QuizManagement';
+import BlogManagement from './BlogManagement';
 import Analytics from './Analytics';
 import AnnouncementsManager from './AnnouncementsManager';
 import Reports from './Reports';
@@ -30,6 +31,7 @@ function AdminDashboard() {
           <UserProgress />
           <CourseManagement />
           <QuizManagement />
+          <BlogManagement />
           <Analytics />
           <AnnouncementsManager />
           <Reports />
