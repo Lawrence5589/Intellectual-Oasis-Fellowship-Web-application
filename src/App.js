@@ -1,6 +1,6 @@
 import React from 'react';
 import { Route, Routes, Navigate, useLocation } from 'react-router-dom';
-import { HelmetProvider } from 'react-helmet-async';
+import { HelmetProvider, Helmet } from 'react-helmet-async';
 import { AuthProvider, useAuth } from './components/contexts/AuthContext';
 import './App.css';
 
@@ -65,6 +65,9 @@ function App() {
 
   return (
     <HelmetProvider>
+      <Helmet>
+        <title>Intellectual Oasis Fellowship</title>
+      </Helmet>
       <AuthProvider>
         <div className="App min-h-screen flex flex-col">
           {showNavbar && <Navbar />}
