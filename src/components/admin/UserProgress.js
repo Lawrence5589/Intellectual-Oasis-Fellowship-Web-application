@@ -13,7 +13,7 @@ function UserProgress() {
   const [currentPage, setCurrentPage] = useState(1);
   const { user } = useAuth();
   
-  const ITEMS_PER_PAGE = 10;
+  const ITEMS_PER_PAGE = 3;
 
   useEffect(() => {
     const fetchUsersProgress = async () => {
@@ -211,19 +211,39 @@ function UserProgress() {
           >
             Previous
           </button>
-          {[...Array(totalPages)].map((_, index) => (
-            <button
-              key={index + 1}
-              onClick={() => setCurrentPage(index + 1)}
-              className={`px-3 py-1 rounded ${
-                currentPage === index + 1
-                  ? 'bg-[rgb(130,88,18)] text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              {index + 1}
-            </button>
-          ))}
+          
+          {/* Modified page number display logic */}
+          {Array.from({ length: totalPages }).map((_, index) => {
+            // Only show current page and one page before/after
+            if (
+              index === 0 || // First page
+              index === totalPages - 1 || // Last page
+              (index >= currentPage - 1 && index <= currentPage + 1) // Current page and adjacent pages
+            ) {
+              return (
+                <React.Fragment key={index}>
+                  {index > 0 && 
+                   index !== currentPage - 1 && 
+                   index !== totalPages - 1 && 
+                   (index === 1 || index === currentPage - 2) && (
+                    <span className="px-2">...</span>
+                  )}
+                  <button
+                    onClick={() => setCurrentPage(index + 1)}
+                    className={`px-3 py-1 rounded ${
+                      currentPage === index + 1
+                        ? 'bg-[rgb(130,88,18)] text-white'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    {index + 1}
+                  </button>
+                </React.Fragment>
+              );
+            }
+            return null;
+          })}
+
           <button
             onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
             disabled={currentPage === totalPages}

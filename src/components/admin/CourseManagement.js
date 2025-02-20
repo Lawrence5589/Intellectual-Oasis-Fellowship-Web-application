@@ -459,6 +459,21 @@ function CourseManagement() {
     }));
   };
 
+  const updateCourseStatus = async (courseId, newStatus) => {
+    try {
+      const courseRef = doc(db, 'courses', courseId);
+      await updateDoc(courseRef, { 
+        status: newStatus,
+        lastUpdated: serverTimestamp()
+      });
+      setUploadSuccess("Course status updated successfully!");
+      fetchCourses();
+    } catch (error) {
+      console.error("Error updating course status:", error);
+      setUploadError("Failed to update course status. Please try again.");
+    }
+  };
+
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
       <h2 className="text-3xl font-bold text-gray-900 mb-8">Course Management</h2>
@@ -677,6 +692,18 @@ function CourseManagement() {
                 <div className="flex justify-between items-center mb-4">
                   <h3 className="text-xl font-semibold">{course.title}</h3>
                   <div>
+                    <select
+                      value={course.status || 'available'}
+                      onChange={(e) => updateCourseStatus(course.id, e.target.value)}
+                      className="mr-4 p-2 border rounded-md focus:ring-2 focus:ring-[rgb(130,88,18)]"
+                    >
+                      {courseStatuses.map((status) => (
+                        <option key={status.value} value={status.value}>
+                          {status.label}
+                        </option>
+                      ))}
+                    </select>
+
                     <button
                       onClick={() => toggleCourseExpansion(course.id)}
                       className="text-blue-600 hover:text-blue-800 mr-4"

@@ -140,45 +140,39 @@ function Certificate() {
       const h2c = await html2canvas;
       const PDF = await jsPDF;
 
-      // Make certificate visible if it's hidden
+      // Make certificate visible for capture
       const originalDisplay = certificate.style.display;
       certificate.style.display = 'block';
-      
-      // Capture directly from the visible element
+
+      // Simple configuration for html2canvas
       const canvas = await h2c(certificate, {
-        scale: 2,
+        scale: 3,
         useCORS: true,
         allowTaint: true,
         backgroundColor: '#ffffff',
-        logging: true,
-        onclone: (clonedDoc) => {
-          const clonedElement = clonedDoc.getElementById('certificate');
-          if (clonedElement) {
-            clonedElement.style.transform = 'none';
-            clonedElement.style.display = 'block';
-            clonedElement.style.visibility = 'visible';
-            clonedElement.style.width = '1056px';
-            clonedElement.style.height = '747px';
-          }
-        }
+        removeContainer: true,
+        foreignObjectRendering: false // Disable foreign object rendering
       });
 
       // Restore original display
       certificate.style.display = originalDisplay;
-      
-      const imgData = canvas.toDataURL('image/jpeg', 1.0);
+
+      // Create PDF
       const pdf = new PDF({
         orientation: 'landscape',
         unit: 'px',
-        format: [1056, 747],
-        hotfixes: ['px_scaling']
+        format: [1056, 747]
       });
+
+      // Add image to PDF
+      const imgData = canvas.toDataURL('image/png');
+      pdf.addImage(imgData, 'PNG', 0, 0, 1056, 747);
       
-      pdf.addImage(imgData, 'JPEG', 0, 0, 1056, 747);
+      // Save PDF
       pdf.save(`${courseData?.title || 'Certificate'}.pdf`);
 
     } catch (error) {
-      console.error('Detailed error in handleDownload:', error);
+      console.error('Detailed download error:', error);
       alert('Failed to download certificate. Please try again.');
     }
   };
@@ -211,13 +205,15 @@ function Certificate() {
         {/* Certificate Container - Hidden on Mobile */}
         <div 
           id="certificate"
-          className="hidden sm:block bg-white relative mx-auto border border-[rgb(130,88,18)]"
+          className="hidden sm:block bg-white relative mx-auto"
           style={{ 
-            width: '100%',
-            maxWidth: '1056px',
-            aspectRatio: '1.414/1',
+            width: '1056px',
+            height: '747px',
             padding: '40px 60px',
-            transform: 'scale(0.95)',
+            border: '2px solid rgb(130,88,18)',
+            backgroundColor: '#ffffff',
+            position: 'relative',
+            margin: '0 auto',
             transformOrigin: 'top center',
           }}
         >
@@ -225,15 +221,32 @@ function Certificate() {
           <img 
             src="/images/Group 4.jpg"
             alt="IOF Logo" 
-            className="absolute top-8 left-8 w-[100px] h-auto object-contain"
+            style={{
+              position: 'absolute',
+              top: '32px',
+              left: '32px',
+              width: '150px',
+              height: 'auto',
+              objectFit: 'contain',
+              objectPosition: 'left top',
+              display: 'block',
+              zIndex: 10
+            }}
+            crossOrigin="anonymous"
           />
 
           {/* Certificate Content */}
           <div className="h-full flex flex-col justify-center items-center">
             <div className="text-center mb-8">
-              <div className="inline-block bg-gray-50 px-4 py-1.5 rounded">
+              <div 
+                style={{
+                  border: '1px solid rgb(130,88,18)',
+                  padding: '1rem 2rem',
+                  backgroundColor: '#f9f9f9'
+                }}
+              >
                 <h2 className="text-base font-serif text-gray-600">VERIFIED CERTIFICATE</h2>
-                <div className="mt-0.5 text-sm text-[rgb(130,88,18)]">WITH DISTINCTION</div>
+                <div className="mt-0.5 text-sm" style={{ color: 'rgb(130,88,18)' }}>WITH DISTINCTION</div>
               </div>
             </div>
 
@@ -268,18 +281,28 @@ function Certificate() {
 
             <div className="flex justify-between items-end w-full mt-12">
               <div className="text-center">
-                <div className="border-t border-gray-300 w-[120px]"></div>
+                <div style={{ borderTop: '1px solid #333', width: '120px' }}></div>
                 <p className="mt-1 text-sm font-medium text-gray-700">Olalekan L. Adeyinka</p>
                 <p className="text-xs text-gray-600">Director</p>
                 <p className="text-xs text-gray-600">Intellectual Oasis Fellowship</p>
               </div>
 
               <div className="text-center">
-                <div className="w-[50px] aspect-square mb-2 mx-auto">
-                  <svg viewBox="0 0 100 100" className="w-full h-full text-[rgb(130,88,18)]">
-                    <circle cx="50" cy="50" r="48" fill="none" stroke="currentColor" strokeWidth="2"/>
-                    <text x="50" y="45" textAnchor="middle" className="font-serif" fill="currentColor" fontSize="16">IOF</text>
-                    <text x="50" y="65" textAnchor="middle" className="font-serif" fill="currentColor" fontSize="12">Verified</text>
+                <div className="w-[100px] aspect-square mb-2 mx-auto"> {/* Increased from 50px */}
+                  <svg 
+                    viewBox="0 0 100 100" 
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      color: 'rgb(130,88,18)',
+                      border: '3px solid currentColor', // Increased border width
+                      borderRadius: '50%',
+                      padding: '8px' // Increased padding
+                    }}
+                  >
+                    <circle cx="50" cy="50" r="45" fill="none" stroke="currentColor" strokeWidth="3"/> {/* Increased stroke width */}
+                    <text x="50" y="45" textAnchor="middle" fill="currentColor" fontSize="24" fontFamily="serif">IOF</text> {/* Increased font size */}
+                    <text x="50" y="65" textAnchor="middle" fill="currentColor" fontSize="16" fontFamily="serif">Verified</text> {/* Increased font size */}
                   </svg>
                 </div>
                 <p className="text-xs text-gray-600">Verify at iofellowship.org/verify/{verificationId}</p>

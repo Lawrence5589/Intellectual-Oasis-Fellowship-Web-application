@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { collection, addDoc, updateDoc, deleteDoc, doc, getDocs, query, orderBy } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, storage } from '../config/firebaseConfig';
+import { db } from '../config/firebaseConfig';
 import { FiEdit2, FiTrash2, FiImage, FiSave } from 'react-icons/fi';
 import LoadingIndicator from '../common/LoadingIndicator';
 
@@ -10,7 +9,6 @@ function BlogManagement() {
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [editing, setEditing] = useState(null);
-  const [imageFile, setImageFile] = useState(null);
   const [formData, setFormData] = useState({
     title: '',
     content: '',
@@ -51,11 +49,28 @@ function BlogManagement() {
     }
   };
 
-  const handleImageUpload = async (file) => {
-    if (!file) return null;
-    const storageRef = ref(storage, `blog_images/${Date.now()}_${file.name}`);
-    await uploadBytes(storageRef, file);
-    return getDownloadURL(storageRef);
+  const convertGoogleDriveLink = (url) => {
+    try {
+      if (url.includes('drive.google.com')) {
+        let fileId = '';
+        
+        // Handle different Google Drive URL formats
+        if (url.includes('/file/d/')) {
+          fileId = url.split('/file/d/')[1].split('/')[0];
+        } else if (url.includes('id=')) {
+          fileId = url.split('id=')[1].split('&')[0];
+        }
+        
+        if (fileId) {
+          // Use the direct download URL format
+          return `https://drive.google.com/uc?export=view&id=${fileId}`;
+        }
+      }
+      return url;
+    } catch (error) {
+      console.error('Error converting Google Drive link:', error);
+      return url;
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -63,21 +78,17 @@ function BlogManagement() {
     setSubmitting(true);
 
     try {
-      let imageUrl = formData.image;
-      if (imageFile) {
-        imageUrl = await handleImageUpload(imageFile);
-      }
-
       const postData = {
         ...formData,
-        image: imageUrl,
-        publishedAt: new Date(),
+        image: convertGoogleDriveLink(formData.image),
+        publishedAt: editing ? (formData.publishedAt || new Date()) : new Date(),
         updatedAt: new Date(),
-        author: 'Admin' // You can replace this with actual user data
+        author: 'Admin'
       };
 
       if (editing) {
-        await updateDoc(doc(db, 'blog_posts', editing), postData);
+        const docRef = doc(db, 'blog_posts', editing);
+        await updateDoc(docRef, postData);
       } else {
         await addDoc(collection(db, 'blog_posts'), postData);
       }
@@ -92,15 +103,16 @@ function BlogManagement() {
         status: 'draft',
         image: ''
       });
-      setImageFile(null);
       setEditing(null);
       
       // Refresh posts list
       await fetchPosts();
       
+      alert('Post saved successfully!');
+      
     } catch (error) {
       console.error('Error saving post:', error);
-      alert('Error saving post. Please try again.');
+      alert('Error saving post: ' + error.message);
     } finally {
       setSubmitting(false);
     }
@@ -231,14 +243,18 @@ function BlogManagement() {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Featured Image
+              Featured Image URL
             </label>
             <input
-              type="file"
-              accept="image/*"
-              onChange={(e) => setImageFile(e.target.files[0])}
+              type="url"
+              value={formData.image}
+              onChange={(e) => setFormData({ ...formData, image: e.target.value })}
+              placeholder="https://example.com/image.jpg"
               className="w-full p-2 border rounded focus:ring-2 focus:ring-[rgb(130,88,18)] focus:border-transparent"
             />
+            <p className="mt-1 text-sm text-gray-500">
+              Enter the URL of an image hosted online
+            </p>
           </div>
 
           <button

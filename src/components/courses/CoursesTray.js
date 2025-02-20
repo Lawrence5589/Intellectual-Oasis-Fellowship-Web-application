@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { db } from '../config/firebaseConfig';
-import { collection, query, getDocs, orderBy, limit, where, getDoc, doc } from 'firebase/firestore';
+import { collection, query, getDocs, orderBy, limit } from 'firebase/firestore';
 import LoadingIndicator from '../common/LoadingIndicator';
 import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
 import { useAuth } from '../contexts/AuthContext';
@@ -17,49 +17,40 @@ function CoursesTray() {
 
   useEffect(() => {
     const fetchTopCourses = async () => {
+      if (!user) {
+        setLoading(false);
+        return;
+      }
+
       try {
-        // First, get user's enrolled courses
-        const userProgressRef = collection(db, 'users', user.uid, 'courseProgress');
-        const userProgressSnapshot = await getDocs(userProgressRef);
-        const enrolledCourseIds = new Set(
-          userProgressSnapshot.docs.map(doc => doc.id)
-        );
-
-        // Fetch all courses with enrollment count
-        const coursesRef = collection(db, 'courses');
-        const coursesSnapshot = await getDocs(coursesRef);
+        console.log('Starting to fetch courses...');
         
-        // Process and sort courses by enrollment count
-        const coursesWithEnrollment = await Promise.all(
-          coursesSnapshot.docs
-            .map(doc => ({
-              id: doc.id,
-              ...doc.data(),
-              enrollmentCount: 0
-            }))
-            .filter(course => !enrolledCourseIds.has(course.id))
+        // Fetch courses with limit
+        const coursesRef = collection(db, 'courses');
+        const q = query(
+          coursesRef,
+          orderBy('createdAt', 'desc'),
+          limit(15)
         );
+        
+        const coursesSnapshot = await getDocs(q);
+        
+        // Process courses
+        const coursesData = coursesSnapshot.docs.map(doc => ({
+          id: doc.id,
+          title: doc.data().title || 'Untitled Course',
+          description: doc.data().description || '',
+          image: doc.data().image || '/images/rcourses.png',
+          difficulty: doc.data().modules ? `${doc.data().modules.length} Modules` : 'All Levels',
+          duration: doc.data().duration || 'Self-paced',
+          enrollmentCount: doc.data().enrollmentCount || 0,
+          targetAudience: doc.data().targetAudience || 'All Learners',
+          learningObjectives: doc.data().learningObjectives || [],
+          createdAt: doc.data().createdAt || null
+        }));
 
-        // Get enrollment counts for each course
-        await Promise.all(
-          coursesWithEnrollment.map(async (course) => {
-            const enrollmentQuery = collection(db, 'users');
-            const enrollmentSnapshot = await getDocs(
-              query(
-                collection(db, 'users'),
-                where(`courseProgress.${course.id}`, '!=', null)
-              )
-            );
-            course.enrollmentCount = enrollmentSnapshot.size;
-          })
-        );
-
-        // Sort by enrollment count and take top 15
-        const topCourses = coursesWithEnrollment
-          .sort((a, b) => b.enrollmentCount - a.enrollmentCount)
-          .slice(0, 15);
-
-        setCourses(topCourses);
+        console.log('Fetched courses:', coursesData);
+        setCourses(coursesData);
       } catch (error) {
         console.error('Error fetching courses:', error);
       } finally {
@@ -67,9 +58,7 @@ function CoursesTray() {
       }
     };
 
-    if (user) {
-      fetchTopCourses();
-    }
+    fetchTopCourses();
   }, [user]);
 
   const scroll = (direction) => {

@@ -16,7 +16,7 @@ import ProfileSettings from './components/auth/ProfileSettings';
 import BlogPage from './components/blog/BlogPage';
 import BlogPost from './components/blog/BlogPost';
 import BlogManagement from './components/admin/BlogManagement';
-
+import AdminRoute from './components/auth/AdminRoute';
 
 // Landing components
 import LandingPage from './components/landing/LandingPage';
@@ -87,9 +87,9 @@ function App() {
                 </PrivateRoute>
               } />
               <Route path="/admin" element={
-                <PrivateRoute>
+                <AdminRoute>
                   <AdminDashboard />
-                </PrivateRoute>
+                </AdminRoute>
               } />
               <Route path="/courses/:courseId" element={
                 <PrivateRoute>
@@ -152,14 +152,11 @@ function App() {
               />
               <Route path="/blog" element={<BlogPage />} />
               <Route path="/blog/:postId" element={<BlogPost />} />
-              <Route 
-                path="/admin/blog" 
-                element={
-                  <PrivateRoute>
-                    <BlogManagement />
-                  </PrivateRoute>
-                } 
-              />
+              <Route path="/admin/blog" element={
+                <AdminRoute>
+                  <BlogManagement />
+                </AdminRoute>
+              } />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </main>

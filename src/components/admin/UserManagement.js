@@ -13,7 +13,7 @@ function UserManagement() {
   const [currentPage, setCurrentPage] = useState(1);
   const { user } = useAuth();
 
-  const ITEMS_PER_PAGE = 10;
+  const ITEMS_PER_PAGE = 3;
 
   useEffect(() => {
     const fetchUsers = async () => {

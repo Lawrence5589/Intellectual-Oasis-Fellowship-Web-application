@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import { doc, getDoc, updateDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../config/firebaseConfig';
@@ -28,10 +28,11 @@ function Quiz() {
   const [error, setError] = useState(null);
   const [timeRemaining, setTimeRemaining] = useState(null);
   const [isTimeUp, setIsTimeUp] = useState(false);
+  const [participantInitialized, setParticipantInitialized] = useState(false);
 
   console.log('Quiz render:', { quizId, participantId, currentUser: !!currentUser, loading, quiz: !!quiz, timeRemaining });
 
-  // Add this new useEffect at the beginning of the component
+  // Modify the initialization useEffect
   useEffect(() => {
     const initializeParticipant = async () => {
       if (!quizId || !participantId) return;
@@ -57,6 +58,7 @@ function Quiz() {
             return;
           }
         }
+        setParticipantInitialized(true);
       } catch (err) {
         console.error('Error initializing participant:', err);
         setError('Failed to initialize quiz. Please try again.');
@@ -107,8 +109,8 @@ function Quiz() {
     };
   }, [quizId]); // Only depend on quizId
 
-  // Modify handleSubmit to properly calculate score
-  const handleSubmit = async () => {
+  // Wrap handleSubmit in useCallback
+  const handleSubmit = useCallback(async () => {
     try {
       // Calculate score
       let score = 0;
@@ -143,7 +145,14 @@ function Quiz() {
       console.error('Error submitting quiz:', error);
       setError('Failed to submit quiz. Please try again.');
     }
-  };
+  }, [answers, quiz, participantId, quizId, navigate]);
+
+  // Now the effect can safely include handleSubmit
+  useEffect(() => {
+    if (isTimeUp) {
+      handleSubmit();
+    }
+  }, [isTimeUp, handleSubmit]);
 
   // Add console logs to debug timer
   useEffect(() => {
@@ -202,14 +211,8 @@ function Quiz() {
     return () => clearInterval(timer);
   }, [quiz, participantId]);
 
-  // Add this effect to auto-submit when time is up
-  useEffect(() => {
-    if (isTimeUp) {
-      handleSubmit();
-    }
-  }, [isTimeUp]);
-
-  if (loading) {
+  // Modify the loading check in the render
+  if (loading || !participantInitialized) {
     return (
       <div className="flex justify-center items-center min-h-screen">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[rgb(130,88,18)]"></div>

@@ -30,10 +30,19 @@ function CoursePage() {
     const fetchGroupedCourses = (type, updateCourses) => {
       const courseQuery = query(collection(db, 'courses'), where('type', '==', type));
       const unsubscribe = onSnapshot(courseQuery, (snapshot) => {
-        console.log('Raw courses:', snapshot.docs.map(doc => ({
-          title: doc.data().title,
-          status: doc.data().status
-        })));
+        // Add logging for total number of documents
+        console.log(`Total ${type} courses:`, snapshot.size);
+        
+        // Log each document's data and ID
+        snapshot.docs.forEach(doc => {
+          console.log('Course document:', {
+            id: doc.id,
+            type: doc.data().type,
+            title: doc.data().title,
+            category: doc.data().category,
+            allData: doc.data()
+          });
+        });
 
         const courses = snapshot.docs
           .map(doc => ({
@@ -78,7 +87,12 @@ function CoursePage() {
           return groups;
         }, {});
 
-        console.log('Grouped courses:', groupedByCategory);
+        // Log the final grouped courses
+        console.log(`Grouped ${type} courses:`, {
+          totalCourses: courses.length,
+          categoriesCount: Object.keys(groupedByCategory).length,
+          groupedByCategory
+        });
 
         updateCourses(groupedByCategory);
       }, (error) => {
