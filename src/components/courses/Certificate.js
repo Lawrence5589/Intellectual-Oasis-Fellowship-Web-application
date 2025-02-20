@@ -139,40 +139,46 @@ function Certificate() {
       const certificate = document.getElementById('certificate');
       const h2c = await html2canvas;
       const PDF = await jsPDF;
+
+      // Make certificate visible if it's hidden
+      const originalDisplay = certificate.style.display;
+      certificate.style.display = 'block';
       
-      // Create a temporary div for both mobile and desktop
-      const tempDiv = document.createElement('div');
-      tempDiv.style.position = 'absolute';
-      tempDiv.style.left = '-9999px';
-      tempDiv.style.width = '1056px'; // Fixed width for consistent output
-      tempDiv.innerHTML = certificate.outerHTML;
-      document.body.appendChild(tempDiv);
-      
-      const tempCert = tempDiv.firstChild;
-      tempCert.style.display = 'block';
-      tempCert.style.transform = 'none';
-      
-      const canvas = await h2c(tempCert, {
+      // Capture directly from the visible element
+      const canvas = await h2c(certificate, {
         scale: 2,
-        logging: false,
         useCORS: true,
         allowTaint: true,
-        backgroundColor: '#ffffff'
+        backgroundColor: '#ffffff',
+        logging: true,
+        onclone: (clonedDoc) => {
+          const clonedElement = clonedDoc.getElementById('certificate');
+          if (clonedElement) {
+            clonedElement.style.transform = 'none';
+            clonedElement.style.display = 'block';
+            clonedElement.style.visibility = 'visible';
+            clonedElement.style.width = '1056px';
+            clonedElement.style.height = '747px';
+          }
+        }
       });
-      
-      document.body.removeChild(tempDiv);
+
+      // Restore original display
+      certificate.style.display = originalDisplay;
       
       const imgData = canvas.toDataURL('image/jpeg', 1.0);
       const pdf = new PDF({
         orientation: 'landscape',
         unit: 'px',
-        format: [canvas.width, canvas.height]
+        format: [1056, 747],
+        hotfixes: ['px_scaling']
       });
       
-      pdf.addImage(imgData, 'JPEG', 0, 0, canvas.width, canvas.height);
+      pdf.addImage(imgData, 'JPEG', 0, 0, 1056, 747);
       pdf.save(`${courseData?.title || 'Certificate'}.pdf`);
+
     } catch (error) {
-      console.error('Error downloading certificate:', error);
+      console.error('Detailed error in handleDownload:', error);
       alert('Failed to download certificate. Please try again.');
     }
   };

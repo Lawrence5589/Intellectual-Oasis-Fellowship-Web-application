@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { collection, onSnapshot, query, where } from 'firebase/firestore';
+import { collection, onSnapshot, query, where, getDocs, getDoc, doc, setDoc } from 'firebase/firestore';
 import { db } from '../config/firebaseConfig';
 import { useNavigate } from 'react-router-dom';
 import LoadingIndicator from '../common/LoadingIndicator';
 import { useAuth } from '../contexts/AuthContext';
-import { getDoc, doc, setDoc } from 'firebase/firestore';
+import ReactDOM from 'react-dom';
 
 function CoursePage() {
   const navigate = useNavigate();
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
   const [certificationCourses, setCertificationCourses] = useState({});
   const [recommendedCourses, setRecommendedCourses] = useState({});
   const [activeCategory, setActiveCategory] = useState({
@@ -17,12 +17,13 @@ function CoursePage() {
   });
   const [loading, setLoading] = useState(true);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const [enrolledCourses, setEnrolledCourses] = useState([]);
+  const [activeTab, setActiveTab] = useState('enrolled');
 
   const allCategories = [
     'Arts and Humanities', 'Biology and Health', 'Business', 'Information Technology', 'Language Learning',
     'Personal Development', 'Social Sciences', 'Teaching and Academics'
   ];
-
 
   useEffect(() => {
     setLoading(true);
@@ -107,13 +108,42 @@ function CoursePage() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  useEffect(() => {
+    if (!user) return;
+    
+    const fetchEnrolledCourses = async () => {
+      try {
+        const progressRef = collection(db, 'users', user.uid, 'courseProgress');
+        const progressSnap = await getDocs(progressRef);
+        const enrolledIds = progressSnap.docs.map(doc => doc.id);
+        
+        const coursesData = await Promise.all(
+          enrolledIds.map(async (courseId) => {
+            const courseDoc = await getDoc(doc(db, 'courses', courseId));
+            const progressDoc = await getDoc(doc(db, 'users', user.uid, 'courseProgress', courseId));
+            return {
+              ...courseDoc.data(),
+              id: courseId,
+              progress: progressDoc.data()?.progress || 0
+            };
+          })
+        );
+        
+        setEnrolledCourses(coursesData);
+      } catch (error) {
+        console.error('Error fetching enrolled courses:', error);
+      }
+    };
+
+    fetchEnrolledCourses();
+  }, [user]);
+
   const CourseCard = ({ course }) => {
     const [showDetails, setShowDetails] = useState(false);
     const [showModal, setShowModal] = useState(false);
     const [isEnrolled, setIsEnrolled] = useState(false);
     const [courseProgress, setCourseProgress] = useState(0);
     const [loading, setLoading] = useState(true);
-    const { user } = useAuth();
 
     useEffect(() => {
       const fetchEnrollmentAndProgress = async () => {
@@ -184,29 +214,27 @@ function CoursePage() {
       }
     };
 
-    const handleLearnClick = () => {
-      if (isEnrolled) {
-        navigate(`/courses/${course.id}`);
-      } else {
-        setShowModal(true);
-      }
-    };
-
     const handleEnroll = async () => {
+      if (!user) {
+        navigate('/login');
+        return;
+      }
+
       try {
         setLoading(true);
+        
         // Initialize progress tracking
         await setDoc(doc(db, 'users', user.uid, 'courseProgress', course.id), {
           progress: 0,
           enrolledAt: new Date().toISOString(),
           lastUpdated: new Date().toISOString()
-        });
+        }, { merge: true });
         
         // Initialize completed subcourses document
         await setDoc(doc(db, 'users', user.uid, 'completedSubCourses', course.id), {
           completed: {},
           firstCompletedAt: new Date().toISOString()
-        });
+        }, { merge: true });
 
         setIsEnrolled(true);
         setCourseProgress(0);
@@ -220,6 +248,19 @@ function CoursePage() {
       }
     };
 
+    const handleLearnClick = () => {
+      if (!user) {
+        navigate('/login');
+        return;
+      }
+
+      if (isEnrolled) {
+        navigate(`/courses/${course.id}`);
+      } else {
+        setShowModal(true);
+      }
+    };
+
     const handleModalClose = () => {
       setShowModal(false);
     };
@@ -230,7 +271,7 @@ function CoursePage() {
 
     // Mobile view
     const MobileView = () => (
-      <div className={`md:hidden bg-white rounded-lg shadow p-3 ${course.status === 'coming_soon' ? 'grayscale' : ''}`}>
+      <div className={`md:hidden bg-white rounded-lg shadow p-3 relative ${course.status === 'coming_soon' ? 'grayscale' : ''}`}>
         <div className="flex items-center space-x-3">
           <img src="/images/rcourses.png" alt={course.title} className="w-16 h-16 object-cover rounded" />
           <div className="flex-1">
@@ -260,14 +301,24 @@ function CoursePage() {
           ) : (
             <>
               <button
-                onClick={handleLearnClick}
-                className="flex-1 bg-[rgb(130,88,18)] text-white px-3 py-1.5 rounded text-sm"
+                onClick={() => {
+                  if (!user) {
+                    navigate('/login');
+                    return;
+                  }
+                  if (isEnrolled) {
+                    navigate(`/courses/${course.id}`);
+                  } else {
+                    setShowModal(true);
+                  }
+                }}
+                className="flex-1 bg-[rgb(130,88,18)] text-white px-3 py-1.5 rounded text-sm hover:bg-[rgb(110,68,0)] active:bg-[rgb(90,48,0)]"
               >
                 {isEnrolled ? (courseProgress === 100 ? 'Review' : 'Continue') : 'Enroll'}
               </button>
               <button
                 onClick={toggleDetails}
-                className="flex-1 bg-[rgb(130,88,18)] text-white px-3 py-1.5 rounded text-sm"
+                className="flex-1 bg-[rgb(130,88,18)] text-white px-3 py-1.5 rounded text-sm hover:bg-[rgb(110,68,0)] active:bg-[rgb(90,48,0)]"
               >
                 {courseProgress === 100 ? "Certificate" : "Details"}
               </button>
@@ -390,38 +441,85 @@ function CoursePage() {
 
         {showModal && (
           <Modal onClose={handleModalClose}>
-            {isEnrolled ? (
-              <div>
-                <h2 className="text-xl font-bold mb-4">Course Progress</h2>
-                <p>Your current progress is {Math.round(courseProgress)}%</p>
+            <div className="text-center">
+              <h2 className="text-xl font-bold mb-4">Enroll in {course.title}</h2>
+              <p className="mb-4">Would you like to enroll in this course?</p>
+              <div className="flex flex-col sm:flex-row justify-center gap-3">
                 <button 
-                  onClick={() => navigate(`/courses/${course.id}`)} 
-                  className="mt-4 bg-[rgb(130,88,18)] text-white px-4 py-2 rounded-lg hover:bg-[rgb(110,68,0)]"
+                  onClick={handleEnroll}
+                  disabled={loading}
+                  className="w-full sm:w-auto bg-[rgb(130,88,18)] text-white px-6 py-2 rounded-lg hover:bg-[rgb(110,68,0)] disabled:opacity-50 disabled:cursor-not-allowed active:bg-[rgb(90,48,0)]"
                 >
-                  Continue Learning
+                  {loading ? (
+                    <span className="flex items-center justify-center">
+                      <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Enrolling...
+                    </span>
+                  ) : (
+                    'Enroll Now'
+                  )}
+                </button>
+                <button 
+                  onClick={handleModalClose}
+                  className="w-full sm:w-auto bg-gray-500 text-white px-6 py-2 rounded-lg hover:bg-gray-600 active:bg-gray-700"
+                >
+                  Cancel
                 </button>
               </div>
-            ) : (
-              <div>
-                <h2 className="text-xl font-bold mb-4">Enroll in {course.title}</h2>
-                <p>Would you like to enroll in this course?</p>
-                <button 
-                  onClick={handleEnroll} 
-                  className="mt-4 bg-[rgb(130,88,18)] text-white px-4 py-2 rounded-lg hover:bg-[rgb(110,68,0)]"
-                >
-                  Enroll Now
-                </button>
-              </div>
-            )}
+            </div>
           </Modal>
         )}
       </div>
     );
 
+    // Update the Modal component to render at the root level
+    const renderModal = () => {
+      if (!showModal) return null;
+      
+      return ReactDOM.createPortal(
+        <Modal onClose={handleModalClose}>
+          <div className="text-center">
+            <h2 className="text-xl font-bold mb-4">Enroll in {course.title}</h2>
+            <p className="mb-4">Would you like to enroll in this course?</p>
+            <div className="flex flex-col sm:flex-row justify-center gap-3">
+              <button 
+                onClick={handleEnroll}
+                disabled={loading}
+                className="w-full sm:w-auto bg-[rgb(130,88,18)] text-white px-6 py-2 rounded-lg hover:bg-[rgb(110,68,0)] disabled:opacity-50 disabled:cursor-not-allowed active:bg-[rgb(90,48,0)]"
+              >
+                {loading ? (
+                  <span className="flex items-center justify-center">
+                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Enrolling...
+                  </span>
+                ) : (
+                  'Enroll Now'
+                )}
+              </button>
+              <button 
+                onClick={handleModalClose}
+                className="w-full sm:w-auto bg-gray-500 text-white px-6 py-2 rounded-lg hover:bg-gray-600 active:bg-gray-700"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </Modal>,
+        document.body
+      );
+    };
+
     return (
       <>
         <MobileView />
         <DesktopView />
+        {renderModal()}
       </>
     );
   };
@@ -516,23 +614,122 @@ function CoursePage() {
     </div>
   );
 
+  // Mobile Header Component
+  const MobileHeader = () => (
+    <div className="bg-white shadow-md p-4 sticky top-0 z-30">
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-xl font-bold text-iof">My Learning</h1>
+        <div className="flex items-center space-x-2">
+          <button className="p-2 rounded-full bg-gray-100">
+            <span className="text-xl">🔍</span>
+          </button>
+          <button className="p-2 rounded-full bg-gray-100">
+            <span className="text-xl">🔔</span>
+          </button>
+        </div>
+      </div>
+      
+      <div className="flex space-x-2 overflow-x-auto pb-2 scrollbar-hide">
+        <TabButton label="My Courses" active={activeTab === 'enrolled'} onClick={() => setActiveTab('enrolled')} />
+        <TabButton label="Free Courses" active={activeTab === 'free'} onClick={() => setActiveTab('free')} />
+        <TabButton label="Certification" active={activeTab === 'certification'} onClick={() => setActiveTab('certification')} />
+      </div>
+    </div>
+  );
+
+  // Tab Button Component
+  const TabButton = ({ label, active, onClick }) => (
+    <button
+      onClick={onClick}
+      className={`px-4 py-2 rounded-full whitespace-nowrap transition-all ${
+        active 
+          ? 'bg-[rgb(130,88,18)] text-white' 
+          : 'bg-gray-100 text-gray-600'
+      }`}
+    >
+      {label}
+    </button>
+  );
+
+  // Enrolled Courses Section
+  const EnrolledCoursesSection = () => (
+    <div className="p-4">
+      <div className="grid grid-cols-1 gap-4">
+        {enrolledCourses.map(course => (
+          <div 
+            key={course.id}
+            onClick={() => navigate(`/courses/${course.id}`)}
+            className="bg-white rounded-xl shadow-md overflow-hidden active:scale-98 transition-transform"
+          >
+            <div className="flex items-center p-3">
+              <img src="/images/rcourses.png" alt={course.title} className="w-20 h-20 object-cover rounded-lg" />
+              <div className="ml-3 flex-1">
+                <h3 className="font-semibold text-gray-800 mb-1">{course.title}</h3>
+                <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div
+                    className="bg-[rgb(130,88,18)] h-2 rounded-full transition-all duration-300"
+                    style={{ width: `${course.progress}%` }}
+                  />
+                </div>
+                <div className="flex items-center justify-between mt-2">
+                  <span className="text-sm text-gray-600">{Math.round(course.progress)}% Complete</span>
+                  <span className="text-sm font-medium text-[rgb(130,88,18)]">Continue</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  // Main mobile content
+  const MobileContent = () => (
+    <div className="pb-20">
+      {activeTab === 'enrolled' && <EnrolledCoursesSection />}
+      {activeTab === 'free' && (
+        <CategoryPane 
+          title="Free" 
+          coursesByCategory={recommendedCourses} 
+          paneType="recommended" 
+        />
+      )}
+      {activeTab === 'certification' && (
+        <CategoryPane 
+          title="Certification" 
+          coursesByCategory={certificationCourses} 
+          paneType="certification" 
+        />
+      )}
+    </div>
+  );
+
   return (
-    <div className="flex min-h-screen bg-gray-100">
+    <div className="flex min-h-screen bg-gray-50">
       <div className="flex-1 flex flex-col">
-        <header className="bg-white shadow-md p-4 flex justify-between items-center sticky top-0 z-10">
-          <h1 className="text-xl font-bold text-iof">Courses</h1>
-        </header>
-        <main className={`p-6 space-y-8 ${isMobile ? 'pb-24' : ''}`}>
-          {loading ? (
-            <LoadingIndicator />
-          ) : (
-            <>
-              <CategoryPane title="Free" coursesByCategory={recommendedCourses} paneType="recommended" />
-              <CategoryPane title="Certification" coursesByCategory={certificationCourses} paneType="certification" />
-            </>
-          )}
-        </main>
-        {isMobile && <MobileNavigation />}
+        {isMobile ? (
+          <>
+            <MobileHeader />
+            <MobileContent />
+            <MobileNavigation />
+          </>
+        ) : (
+          <>
+            <header className="bg-white shadow-md p-4 flex justify-between items-center sticky top-0 z-10">
+              <h1 className="text-xl font-bold text-iof">Courses</h1>
+            </header>
+            <main className="p-6 space-y-8">
+              {loading ? (
+                <LoadingIndicator />
+              ) : (
+                <>
+                  <CategoryPane title="Free" coursesByCategory={recommendedCourses} paneType="recommended" />
+                  <CategoryPane title="Certification" coursesByCategory={certificationCourses} paneType="certification" />
+                </>
+              )}
+            </main>
+          </>
+        )}
       </div>
     </div>
   );
@@ -560,10 +757,9 @@ function enrollUserInCourse(courseId) {
 
 const Modal = ({ children, onClose }) => {
   return (
-    <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex justify-center items-center">
-      <div className="bg-white rounded-lg p-4 shadow-lg w-96">
+    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center p-4">
+      <div className="bg-white rounded-lg p-6 shadow-xl w-full max-w-md relative">
         {children}
-        <button onClick={onClose} className="mt-4 bg-red-500 text-white px-4 py-2 rounded-lg">Close</button>
       </div>
     </div>
   );

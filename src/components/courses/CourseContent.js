@@ -90,9 +90,6 @@ function CourseContent() {
                         <li>
                             Upon Submission, ensure you get "Results Submitted Successfully" before clicking Mark Complete.
                         </li>
-                        <li>
-                            During Submission of Practical Exercises, include your name in the Title for supervisor discussions.
-                        </li>
                         <li>Check Your Progress: Completed courses will be marked with a tick on your schedule page.</li>
                         <li>Finish All Courses: Download your certificate after passing all courses.</li>
                     </ul>

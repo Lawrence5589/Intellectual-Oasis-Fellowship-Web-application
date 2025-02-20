@@ -1,23 +1,70 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../config/firebaseConfig';
 import { useAuth } from '../contexts/AuthContext';
+import { v4 as uuidv4 } from 'uuid';
 
 function Quiz() {
   const { quizId } = useParams();
   const [searchParams] = useSearchParams();
-  const participantId = searchParams.get('participant');
   const navigate = useNavigate();
   const { currentUser } = useAuth();
   
+  // Get participantId from URL or generate new one
+  const participantId = searchParams.get('participant') || uuidv4();
+
+  // Redirect to include participantId if not in URL
+  useEffect(() => {
+    if (!searchParams.get('participant')) {
+      navigate(`/take-quiz/${quizId}?participant=${participantId}`, { replace: true });
+    }
+  }, [quizId, participantId, searchParams, navigate]);
+
   const [quiz, setQuiz] = useState(null);
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [answers, setAnswers] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [timeRemaining, setTimeRemaining] = useState(null);
+  const [isTimeUp, setIsTimeUp] = useState(false);
 
-  console.log('Quiz render:', { quizId, participantId, currentUser: !!currentUser, loading, quiz: !!quiz });
+  console.log('Quiz render:', { quizId, participantId, currentUser: !!currentUser, loading, quiz: !!quiz, timeRemaining });
+
+  // Add this new useEffect at the beginning of the component
+  useEffect(() => {
+    const initializeParticipant = async () => {
+      if (!quizId || !participantId) return;
+
+      try {
+        const participantRef = doc(db, 'public-quiz-participants', participantId);
+        const participantDoc = await getDoc(participantRef);
+
+        if (!participantDoc.exists()) {
+          // Create new participant document if it doesn't exist
+          await setDoc(participantRef, {
+            quizId: quizId,
+            startedAt: serverTimestamp(),
+            completed: false,
+            answers: {}
+          });
+          console.log('Created new participant document');
+        } else {
+          // If already completed, redirect to results
+          if (participantDoc.data().completed) {
+            const score = participantDoc.data().score;
+            navigate(`/quiz-results/${quizId}?participant=${participantId}&score=${score}`);
+            return;
+          }
+        }
+      } catch (err) {
+        console.error('Error initializing participant:', err);
+        setError('Failed to initialize quiz. Please try again.');
+      }
+    };
+
+    initializeParticipant();
+  }, [quizId, participantId, navigate]);
 
   // Fetch quiz data
   useEffect(() => {
@@ -60,38 +107,107 @@ function Quiz() {
     };
   }, [quizId]); // Only depend on quizId
 
+  // Modify handleSubmit to properly calculate score
   const handleSubmit = async () => {
     try {
       // Calculate score
       let score = 0;
-      quiz.questions.forEach((question, index) => {
-        if (answers[index] === question.correctOption) {
+      Object.entries(answers).forEach(([questionIndex, selectedAnswer]) => {
+        const question = quiz.questions[questionIndex];
+        if (question && selectedAnswer === question.correctOption) {
           score++;
         }
       });
 
       const finalScore = Math.round((score / quiz.questions.length) * 100);
 
-      // Get the participant's start time and calculate duration
-      const participantDoc = await getDoc(doc(db, 'public-quiz-participants', participantId));
-      const startTime = participantDoc.data().startedAt;
-      const completedAt = new Date();
+      // Check if participant exists
+      const participantRef = doc(db, 'public-quiz-participants', participantId);
+      const participantDoc = await getDoc(participantRef);
+      
+      if (!participantDoc.exists()) {
+        throw new Error('Participant not found');
+      }
 
-      // Update participant record with completion time and score
-      await updateDoc(doc(db, 'public-quiz-participants', participantId), {
+      // Update participant record
+      await updateDoc(participantRef, {
         completed: true,
         score: finalScore,
         answers: answers,
-        completedAt: completedAt
+        completedAt: serverTimestamp()
       });
 
       // Navigate to results
       navigate(`/quiz-results/${quizId}?participant=${participantId}&score=${finalScore}`);
     } catch (error) {
       console.error('Error submitting quiz:', error);
-      setError('Failed to submit quiz');
+      setError('Failed to submit quiz. Please try again.');
     }
   };
+
+  // Add console logs to debug timer
+  useEffect(() => {
+    if (!quiz?.timeLimit || !participantId) {
+      console.log('Timer not starting:', { timeLimit: quiz?.timeLimit, participantId });
+      return;
+    }
+
+    const getTimeRemaining = async () => {
+      try {
+        const participantRef = doc(db, 'public-quiz-participants', participantId);
+        const participantDoc = await getDoc(participantRef);
+        
+        if (!participantDoc.exists()) {
+          console.error('Participant document not found');
+          return;
+        }
+
+        const startTime = participantDoc.data().startedAt?.toDate();
+        if (!startTime) {
+          console.error('Start time not found in participant document');
+          return;
+        }
+
+        const timeLimitMs = quiz.timeLimit * 60 * 1000; // Convert minutes to milliseconds
+        const endTime = new Date(startTime.getTime() + timeLimitMs);
+        const remaining = endTime - new Date();
+
+        console.log('Timer initialized:', { 
+          startTime, 
+          timeLimitMs, 
+          endTime, 
+          remaining 
+        });
+
+        setTimeRemaining(Math.max(0, remaining));
+      } catch (err) {
+        console.error('Error getting time remaining:', err);
+      }
+    };
+
+    getTimeRemaining();
+
+    const timer = setInterval(() => {
+      setTimeRemaining(prev => {
+        if (prev === null) return null;
+        const newTime = Math.max(0, prev - 1000);
+        if (newTime === 0) {
+          setIsTimeUp(true);
+          clearInterval(timer);
+        }
+        return newTime;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [quiz, participantId]);
+
+  // Add this effect to auto-submit when time is up
+  useEffect(() => {
+    if (isTimeUp) {
+      handleSubmit();
+    }
+  }, [isTimeUp]);
 
   if (loading) {
     return (
@@ -122,6 +238,11 @@ function Quiz() {
       <div className="bg-white rounded-lg shadow p-6">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold">Question {currentQuestion + 1} of {quiz.questions.length}</h1>
+          {timeRemaining !== null && (
+            <div className={`text-xl font-bold ${timeRemaining < 60000 ? 'text-red-600' : ''}`}>
+              Time: {Math.floor(timeRemaining / 60000)}:{String(Math.floor((timeRemaining % 60000) / 1000)).padStart(2, '0')}
+            </div>
+          )}
         </div>
         
         <div className="mb-6">

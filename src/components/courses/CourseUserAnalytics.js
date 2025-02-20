@@ -31,19 +31,24 @@ function CourseUserAnalytics() {
 
   useEffect(() => {
     const fetchAnalytics = async () => {
-      if (!user) return;
+      if (!user) {
+        console.log('No user found');
+        return;
+      }
 
       try {
         setLoading(true);
+        console.log('Fetching analytics for user:', user.uid);
         
         // Get user's course progress
         const progressRef = collection(db, 'users', user.uid, 'courseProgress');
         const progressSnapshot = await getDocs(progressRef);
+        console.log('Progress snapshot:', progressSnapshot.docs.map(doc => ({ id: doc.id, data: doc.data() })));
         
-        // Get certificates directly from certificates collection
-        const certificatesRef = collection(db, 'certificates');
-        const certificatesQuery = query(certificatesRef, where('userId', '==', user.uid));
-        const certificatesSnapshot = await getDocs(certificatesQuery);
+        // Get completed courses data
+        const completedRef = collection(db, 'users', user.uid, 'completedSubCourses');
+        const completedSnapshot = await getDocs(completedRef);
+        console.log('Completed courses snapshot:', completedSnapshot.docs.map(doc => ({ id: doc.id, data: doc.data() })));
         
         let totalCourses = 0;
         let completedCourses = 0;
@@ -56,12 +61,17 @@ function CourseUserAnalytics() {
           progressSnapshot.docs.map(async (progressDoc) => {
             const progressData = progressDoc.data();
             const courseId = progressDoc.id;
+            console.log('Processing course:', courseId, progressData);
 
             // Fetch the course details
             const courseDoc = await getDoc(doc(db, 'courses', courseId));
-            if (!courseDoc.exists()) return;
+            if (!courseDoc.exists()) {
+              console.log('Course document not found:', courseId);
+              return;
+            }
 
             const courseData = courseDoc.data();
+            console.log('Course data:', courseData);
             totalCourses++;
 
             // Update category count
@@ -71,38 +81,59 @@ function CourseUserAnalytics() {
 
             // Check completion status
             if (progressData.progress === 100) {
+              console.log('Course completed:', courseId);
               completedCourses++;
+              
+              // Check for certificate in completedSubCourses
+              const completedDoc = completedSnapshot.docs.find(doc => doc.id === courseId);
+              console.log('Completed doc found:', completedDoc?.data());
+              
+              if (completedDoc) {
+                const completedData = completedDoc.data();
+                
+                // Also check certificates collection
+                const certificateRef = doc(db, 'certificates', completedData.verificationId || 'none');
+                const certificateDoc = await getDoc(certificateRef);
+                console.log('Certificate doc:', certificateDoc?.data());
+
+                if (completedData.verificationId && certificateDoc.exists()) {
+                  certificates.push({
+                    id: courseId,
+                    title: courseData.title,
+                    completedAt: completedData.firstCompletedAt || completedData.completedAt,
+                    verificationId: completedData.verificationId,
+                    category: courseData.category || 'General'
+                  });
+                  console.log('Certificate added:', certificates[certificates.length - 1]);
+                }
+              }
             } else if (progressData.progress > 0) {
+              console.log('Course in progress:', courseId);
               inProgressCourses++;
             }
           })
         );
 
-        // Process certificates
-        certificates = certificatesSnapshot.docs.map(doc => {
-          const certData = doc.data();
-          return {
-            id: certData.courseId,
-            title: certData.courseName,
-            completedAt: certData.completedAt,
-            verificationId: doc.id,
-            category: certData.category || 'General'
-          };
-        });
+        // Sort certificates by completion date (newest first)
+        certificates.sort((a, b) => new Date(b.completedAt) - new Date(a.completedAt));
+        console.log('Final certificates array:', certificates);
 
         // Calculate completion rate
         const completionRate = totalCourses > 0 
           ? ((completedCourses / totalCourses) * 100).toFixed(1) 
           : 0;
 
-        setAnalytics({
+        const analyticsData = {
           totalCourses,
           completedCourses,
           inProgressCourses,
           completionRate,
           certificates,
           preferredCategories: categories,
-        });
+        };
+        
+        console.log('Setting analytics data:', analyticsData);
+        setAnalytics(analyticsData);
 
       } catch (error) {
         console.error('Error fetching analytics:', error);
@@ -113,6 +144,11 @@ function CourseUserAnalytics() {
 
     fetchAnalytics();
   }, [user]);
+
+  // Add console log to check analytics state
+  useEffect(() => {
+    console.log('Current analytics state:', analytics);
+  }, [analytics]);
 
   const handleCertificateClick = (courseId) => {
     navigate(`/courses/${courseId}/certificate`);

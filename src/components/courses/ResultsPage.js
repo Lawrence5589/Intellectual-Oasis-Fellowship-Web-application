@@ -59,6 +59,9 @@ function ResultsPage() {
     try {
       setLoading(true);
       
+      // Initialize batch at the beginning
+      const batch = writeBatch(db);
+      
       // Update user's course progress
       const userProgressRef = doc(db, 'users', user.uid, 'courseProgress', courseId);
       const userCompletedRef = doc(db, 'users', user.uid, 'completedSubCourses', courseId);
@@ -88,8 +91,29 @@ function ResultsPage() {
       const completedCount = Object.keys(completedData.completed).length;
       const newProgress = (completedCount / totalSubCourses) * 100;
 
-      // Batch write the updates
-      const batch = writeBatch(db);
+      // Generate certificate if course is fully completed
+      if (newProgress === 100) {
+        const verificationId = `IOF-${Math.random().toString(36).substr(2, 8).toUpperCase()}`;
+        
+        // Create certificate data
+        const certificateData = {
+          userId: user.uid,
+          userName: user.displayName || user.email,
+          courseId: courseId,
+          courseName: courseData.title,
+          completedAt: new Date().toISOString(),
+          verificationId: verificationId,
+          category: courseData.category || 'General'
+        };
+
+        // Store certificate in certificates collection
+        const certificateRef = doc(db, 'certificates', verificationId);
+        batch.set(certificateRef, certificateData);
+        
+        // Update completed data with verification ID
+        completedData.verificationId = verificationId;
+        completedData.firstCompletedAt = new Date().toISOString();
+      }
       
       // Update completed subcourses
       batch.set(userCompletedRef, completedData, { merge: true });
@@ -114,8 +138,12 @@ function ResultsPage() {
 
       await batch.commit();
       
-      // Navigate back to course
-      navigate(`/courses/${courseId}`);
+      // Navigate to certificate page if course is completed
+      if (newProgress === 100) {
+        navigate(`/courses/${courseId}/certificate`);
+      } else {
+        navigate(`/courses/${courseId}`);
+      }
     } catch (error) {
       console.error('Error updating progress:', error);
       alert('Failed to update progress. Please try again.');
