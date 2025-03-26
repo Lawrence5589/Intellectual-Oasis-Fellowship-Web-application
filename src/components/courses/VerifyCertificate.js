@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { doc, getDoc } from 'firebase/firestore';
-import { db } from '../config/firebaseConfig';
+import { db } from '../../firebase';
 import LoadingIndicator from '../common/LoadingIndicator';
 
 function VerifyCertificate() {

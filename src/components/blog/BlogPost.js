@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { doc, getDoc, getDocs, collection, query, orderBy, addDoc, updateDoc, deleteDoc, writeBatch, serverTimestamp, increment, arrayUnion, arrayRemove } from 'firebase/firestore';
-import { db, auth } from '../config/firebaseConfig';
+import { db, auth } from '../../firebase';
 import { FiClock, FiUser, FiTag, FiArrowLeft, FiShare2 } from 'react-icons/fi';
 import SEO from '../seo/SEO';
 import LoadingIndicator from '../common/LoadingIndicator';

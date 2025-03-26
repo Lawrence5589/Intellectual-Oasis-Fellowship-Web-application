@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
-import { db } from '../config/firebaseConfig';
+import { db } from '../../firebase';
 
 function Announcements() {
   const [latestAnnouncement, setLatestAnnouncement] = useState('');

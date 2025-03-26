@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { collection, getDocs, doc, getDoc, query, orderBy } from 'firebase/firestore';
-import { db } from '../config/firebaseConfig';
+import { db } from '../../firebase';
 import { useAuth } from '../contexts/AuthContext';
 import LoadingIndicator from '../common/LoadingIndicator';
 import html2pdf from 'html2pdf.js';

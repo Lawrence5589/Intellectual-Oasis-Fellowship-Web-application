@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { db } from '../config/firebaseConfig';
+import { db } from '../../firebase';
 import { collection, getDocs, doc, getDoc, query, where } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
 import LoadingIndicator from '../common/LoadingIndicator';

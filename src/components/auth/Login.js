@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { auth } from '../config/firebaseConfig';
+import { auth } from '../../firebase';
 import { signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, sendPasswordResetEmail } from 'firebase/auth';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -9,6 +9,9 @@ function Login() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [loginAttempts, setLoginAttempts] = useState(0);
+  const [isLocked, setIsLocked] = useState(false);
+  const [lockoutTime, setLockoutTime] = useState(null);
   const navigate = useNavigate();
   const { user } = useAuth();
 
@@ -18,13 +21,46 @@ function Login() {
     }
   }, [user, navigate]);
 
+  // Add input sanitization function
+  const sanitizeInput = (input) => {
+    return input.trim().replace(/[<>]/g, '');
+  };
+
+  // Check if account is locked
+  useEffect(() => {
+    if (isLocked && lockoutTime) {
+      const timer = setTimeout(() => {
+        setIsLocked(false);
+        setLockoutTime(null);
+      }, 300000); // 5 minutes lockout
+      return () => clearTimeout(timer);
+    }
+  }, [isLocked, lockoutTime]);
+
   const handleLogin = async (e) => {
     e.preventDefault();
+    if (isLocked) {
+      const remainingTime = Math.ceil((lockoutTime - Date.now()) / 1000 / 60);
+      setError(`Account is temporarily locked. Please try again in ${remainingTime} minutes.`);
+      return;
+    }
+
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      const sanitizedEmail = sanitizeInput(email);
+      await signInWithEmailAndPassword(auth, sanitizedEmail, password);
+      setLoginAttempts(0); // Reset attempts on successful login
       navigate('/dashboard');
     } catch (err) {
-      setError('Failed to log in');
+      const newAttempts = loginAttempts + 1;
+      setLoginAttempts(newAttempts);
+      
+      if (newAttempts >= 5) {
+        setIsLocked(true);
+        setLockoutTime(Date.now() + 300000); // 5 minutes lockout
+        setError('Too many failed attempts. Account locked for 5 minutes.');
+      } else {
+        setError('Invalid email or password');
+      }
     }
   };
 

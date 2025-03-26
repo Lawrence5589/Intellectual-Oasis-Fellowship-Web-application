@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { doc, updateDoc, getDoc } from 'firebase/firestore';
-import { db, auth } from '../config/firebaseConfig';
+import { db, auth } from '../../firebase';
 import { updateProfile, updateEmail, updatePassword } from 'firebase/auth';
 import { FiUser, FiMail, FiLock, FiSave, FiX, FiArrowLeft } from 'react-icons/fi';
 import { useNavigate } from 'react-router-dom';

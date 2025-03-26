@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { collection, addDoc, query, getDocs, where } from 'firebase/firestore';
-import { db, auth } from '../config/firebaseConfig';
+import { db, auth } from '../../firebase';
 import { useNavigate } from 'react-router-dom';
 import QuizShareModal from './QuizShareModal';
 

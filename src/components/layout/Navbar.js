@@ -62,7 +62,26 @@ function Navbar() {
           </Link>
 
           {/* Desktop Navigation */}
-
+          <div className="hidden md:flex items-center space-x-4">
+            <Link
+              to="/courses"
+              className="text-gray-700 hover:text-[rgb(130,88,18)] transition-colors duration-300"
+            >
+              Courses
+            </Link>
+            <Link
+              to="/scholarships"
+              className="text-gray-700 hover:text-[rgb(130,88,18)] transition-colors duration-300"
+            >
+              Scholarships
+            </Link>
+            <Link
+              to="/blog"
+              className="text-gray-700 hover:text-[rgb(130,88,18)] transition-colors duration-300"
+            >
+              Blog
+            </Link>
+          </div>
 
           {/* Auth Buttons / User Menu */}
           <div className="hidden md:flex items-center space-x-4">

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { doc, getDoc } from 'firebase/firestore';
-import { db } from '../config/firebaseConfig';
+import { db } from '../../firebase';
 
 function CoursePresentation() {
     const { courseId, moduleTitle, subCourseId } = useParams();

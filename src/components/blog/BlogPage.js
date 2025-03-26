@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { collection, getDocs, query, orderBy, where } from 'firebase/firestore';
-import { db } from '../config/firebaseConfig';
+import { db } from '../../firebase';
 import { useNavigate } from 'react-router-dom';
 import SEO from '../seo/SEO';
 import LoadingIndicator from '../common/LoadingIndicator';

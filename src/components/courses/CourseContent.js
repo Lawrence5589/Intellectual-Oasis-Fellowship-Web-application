@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import ProgressBar from '../courses/ProgressBar';
 import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
-import { db } from '../config/firebaseConfig';
+import { db } from '../../firebase';
 import LoadingIndicator from '../common/LoadingIndicator';
 import { useAuth } from '../contexts/AuthContext';
 

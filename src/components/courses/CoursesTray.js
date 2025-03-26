@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { db } from '../config/firebaseConfig';
+import { db } from '../../firebase';
 import { collection, query, getDocs, orderBy, limit } from 'firebase/firestore';
 import LoadingIndicator from '../common/LoadingIndicator';
 import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline';

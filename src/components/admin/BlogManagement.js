@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { collection, addDoc, updateDoc, deleteDoc, doc, getDocs, query, orderBy } from 'firebase/firestore';
-import { db } from '../config/firebaseConfig';
+import { db } from '../../firebase';
 import { FiEdit2, FiTrash2, FiImage, FiSave } from 'react-icons/fi';
 import LoadingIndicator from '../common/LoadingIndicator';
 

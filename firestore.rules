@@ -1,42 +1,100 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-
+    
     // Helper functions
     function isAuthenticated() {
       return request.auth != null;
     }
-    
+
     function isAdmin() {
       return isAuthenticated() && 
-             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
-    
+
     function isOwner(userId) {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
     // Users collection
     match /users/{userId} {
-      allow read: if isAuthenticated();
+      allow read: if isAuthenticated() && (isOwner(userId) || isAdmin());
       allow create: if isAuthenticated();
-      allow update: if isAdmin() || isOwner(userId);
+      allow update: if isOwner(userId) || isAdmin();
       allow delete: if isAdmin();
+      
+      // Course progress subcollection
+      match /courseProgress/{courseId} {
+        allow read, write: if isOwner(userId) || isAdmin();
+      }
+      
+      // Exam results subcollection
+      match /examResults/{resultId} {
+        allow read, write: if isOwner(userId) || isAdmin();
+      }
+      
+      // Completed subcourses subcollection
+      match /completedSubCourses/{courseId} {
+        allow read, write: if isOwner(userId) || isAdmin();
+      }
+    }
+
+    // Blog posts collection
+    match /blog_posts/{postId} {
+      allow read: if true;  // Allow public read access
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Questions collection
+    match /questions/{questionId} {
+      allow read: if true;  // Anyone can read questions
+      allow write: if isAuthenticated();  // Only authenticated users can write
+    }
+
+    // Certificates collection
+    match /certificates/{certificateId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin() || (isAuthenticated() && request.resource.data.userId == request.auth.uid);
     }
 
     // Courses collection
     match /courses/{courseId} {
-  allow read: if isAuthenticated();
-  allow write: if isAuthenticated(); // Allow all authenticated users to write
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
 
+      // Modules subcollection
+      match /modules/{moduleId} {
+        allow read, write: if isAuthenticated();
+
+        // SubCourses subcollection
+        match /subCourses/{subCourseId} {
+          allow read, write: if isAuthenticated();
+        }
+      }
     }
 
-    // Enrolled courses collection
+    // Quizzes collection
+    match /quizzes/{quizId} {
+      allow read: if true;
+      allow write: if isAuthenticated();
+      allow delete: if resource.data.createdBy == request.auth.uid;
+    }
+    
+    // Quiz Participants collection
+    match /quiz-participants/{participantId} {
+      allow read, write: if isAuthenticated();
+    }
+    
+    // Public Quiz Participants collection
+    match /public-quiz-participants/{participantId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // Enrolled Courses collection
     match /enrolledCourses/{enrollmentId} {
-      allow read: if isAuthenticated(); // You can refine this for ownership
+      allow read: if isAuthenticated();
       allow create: if isAuthenticated();
-      allow update: if isAuthenticated() && 
-                   (request.auth.uid == resource.data.userId || isAdmin());
+      allow update: if isOwner(resource.data.userId) || isAdmin();
       allow delete: if isAdmin();
     }
 
@@ -46,10 +104,21 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    // Announcements collection
-    match /announcements/{announcementId} {
+    // General Exam Results collection
+    match /examResults/{resultId} {
       allow read: if isAuthenticated();
-      allow write: if isAdmin();
+      allow create: if isAuthenticated();
+    }
+
+    // Announcements collection
+    match /announcements/{announcement} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isAdmin();
+    }
+    
+    // Catch-all for admin to have access to everything not explicitly listed
+    match /{document=**} {
+      allow read, write: if isAdmin();
     }
   }
 }

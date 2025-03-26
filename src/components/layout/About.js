@@ -5,9 +5,9 @@ import { motion } from 'framer-motion';
 function About() {
   const purposes = [
     {
-      title: "Providing a Scholarship Platform",
+      title: "Scholarship Program Impact",
       description:
-        "We offer a dedicated platform for Nigerian students to access the opportunities the fellowship offers and become scholarship recipients, enabling them to pursue their academic goals without financial barriers.",
+        "Since our inception, we've supported over 300 students through our scholarship program, providing financial assistance to help them achieve their academic dreams. Our program has transformed lives and created opportunities for deserving students across Nigeria.",
       icon: (
         <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 14l9-5-9-5-9 5 9 5z" />
@@ -15,29 +15,29 @@ function About() {
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 14v7" />
         </svg>
       ),
-      stats: { students: "5000+", success: "95%", countries: "10+" }
+      stats: { students: "300+", value: "₦10M+", institutions: "50+" }
     },
     {
-      title: "Course Certification Platform",
+      title: "Support Education",
       description:
-        "Our course certification platform allows students to gain credible certifications in various fields, enhancing their skills and employability.",
+        "Your support can make a difference in students' lives. Through donations, we can provide more scholarships and help more students access quality education. Join us in creating a brighter future for Nigeria's youth.",
       icon: (
         <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
       ),
-      stats: { courses: "200+", certified: "10000+", partners: "50+" }
+      stats: { donors: "100+", impact: "95%", regions: "36" }
     },
     {
-      title: "Quiz Generation Platform",
+      title: "Success Stories",
       description:
-        "We provide a robust quiz generation platform, allowing educators and students to create and utilize quizzes for effective learning and assessment. This platform is designed to help students prepare for exams and improve their academic performance, gaining content mastery.",
+        "Our scholarship recipients have gone on to excel in their studies and make meaningful contributions to their communities. Read their inspiring stories and see how your support can help create more success stories.",
       icon: (
         <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
         </svg>
       ),
-      stats: { quizzes: "1000+", participants: "15000+", accuracy: "98%" }
+      stats: { stories: "100+", graduates: "200+", testimonials: "50+" }
     }
   ];
 
@@ -60,10 +60,10 @@ function About() {
         >
           <h4 className="text-[rgb(130,88,18)] font-semibold mb-4">WHAT WE DO</h4>
           <h2 className="text-4xl font-bold text-gray-900 mb-6">
-            Empowering Education Through Technology
+            Transforming Lives Through Education
           </h2>
           <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-            We're committed to making quality education accessible to everyone through innovative digital solutions.
+            We're committed to making quality education accessible to deserving students through our scholarship program. Join us in creating opportunities and transforming lives.
           </p>
         </motion.div>
 
@@ -99,18 +99,18 @@ function About() {
 
             <div className="flex flex-col sm:flex-row gap-4">
               <Link
-                to="/login"
+                to="/scholarships"
                 className="group relative px-8 py-4 bg-[rgb(130,88,18)] text-white rounded-full overflow-hidden transition-all duration-300 hover:bg-[rgb(110,68,0)] text-center"
               >
-                <span className="relative z-10 text-lg font-medium">Get Started</span>
+                <span className="relative z-10 text-lg font-medium">Apply for Scholarship</span>
                 <div className="absolute inset-0 bg-white/20 transform scale-x-0 group-hover:scale-x-100 transition-transform origin-left" />
               </Link>
               
               <Link
-                to="/courses"
+                to="/donate"
                 className="px-8 py-4 border-2 border-[rgb(130,88,18)] text-[rgb(130,88,18)] rounded-full text-lg font-medium hover:bg-[rgb(130,88,18)] hover:text-white transition-all duration-300 text-center"
               >
-                Explore Courses
+                Support Students
               </Link>
             </div>
           </motion.div>

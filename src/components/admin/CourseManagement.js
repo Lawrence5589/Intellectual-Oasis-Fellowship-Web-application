@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { db } from '../config/firebaseConfig';
+import { db } from '../../firebase';
 import { collection, doc, getDocs, getDoc, addDoc, deleteDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import LoadingIndicator from '../common/LoadingIndicator';
 

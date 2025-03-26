@@ -5,9 +5,9 @@ function SEO({ title, description, keywords, image, pathname }) {
   const siteUrl = "https://iofellowship.org"; // Your actual domain
 
   // Default values related to Intellectual Oasis Fellowship
-  const defaultTitle = "Intellectual Oasis Fellowship | Scholarships, Quizzes, and Courses";
-  const defaultDescription = "Intellectual Oasis Fellowship (IOF) offers scholarships, one of Africa's largest quiz repositories, and a course management platform to earn certifications.";
-  const defaultKeywords = "Intellectual Oasis Fellowship, IOF, scholarships, African quiz repository, course management, academic fellowship, certifications";
+  const defaultTitle = "Intellectual Oasis Fellowship | Supporting Over 300 Students Through Scholarships";
+  const defaultDescription = "Intellectual Oasis Fellowship (IOF) has transformed the lives of over 300 students through our scholarship program. Join us in making education accessible to deserving students through donations and support.";
+  const defaultKeywords = "Intellectual Oasis Fellowship, IOF, scholarships, student support, educational funding, academic fellowship, student scholarships, education donations, Nigeria education, African scholarships";
   const defaultImage = `${siteUrl}/images/Group 4.jpg`; // Replace with your default image path
 
   const facebookPageUrl = "https://www.facebook.com/profile.php?id=61561270017439";

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { doc, getDoc, setDoc, collection, query, where, getDocs } from 'firebase/firestore';
-import { db } from '../config/firebaseConfig';
+import { db } from '../../firebase';
 import { useAuth } from '../contexts/AuthContext';
 import LoadingIndicator from '../common/LoadingIndicator';
 import { v4 as uuidv4 } from 'uuid';

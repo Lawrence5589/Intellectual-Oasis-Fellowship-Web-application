@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { collection, query, where, getDocs, deleteDoc, doc, Timestamp, limit, startAfter, orderBy, addDoc } from 'firebase/firestore';
-import { db, auth } from '../config/firebaseConfig';
+import { db, auth } from '../../firebase';
 import { FiShare2, FiTrash2, FiUsers, FiClock, FiBarChart2, FiBook, FiCalendar, FiChevronLeft, FiChevronRight, FiAward, FiX } from 'react-icons/fi';
 import { useAuth } from '../contexts/AuthContext';
 import { onAuthStateChanged } from 'firebase/auth';

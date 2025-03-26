@@ -7,6 +7,8 @@ import './App.css';
 // Layout components
 import Navbar from './components/layout/Navbar';
 import Footer from './components/layout/Footer';
+import ScrollToTop from './components/common/ScrollToTop';
+import CookieConsent from './components/CookieConsent';
 
 // Auth components
 import SignUp from './components/auth/SignUp';
@@ -17,6 +19,8 @@ import BlogPage from './components/blog/BlogPage';
 import BlogPost from './components/blog/BlogPost';
 import BlogManagement from './components/admin/BlogManagement';
 import AdminRoute from './components/auth/AdminRoute';
+import ContactManagement from './components/admin/ContactManagement';
+import DonationManagement from './components/admin/DonationManagement';
 
 // Landing components
 import LandingPage from './components/landing/LandingPage';
@@ -41,8 +45,24 @@ import Quiz from './components/quiz/Quiz';
 import PublicQuizEntry from './components/quiz/PublicQuizEntry';
 import QuizResults from './components/quiz/QuizResults';
 
+// Scholarship components
+import ScholarshipPage from './components/scholarships/ScholarshipPage';
+import ScholarshipApplication from './components/scholarships/ScholarshipApplication';
+import ScholarshipManagement from './components/admin/ScholarshipManagement';
+import MyApplications from './components/scholarships/MyApplications';
+
 // Common components
 import NotFound from './components/common/NotFound';
+import ApplicationSuccess from './components/scholarships/ApplicationSuccess';
+
+// New page components
+import Donate from './components/pages/Donate';
+import About from './components/pages/About';
+import FAQ from './components/pages/FAQ';
+import Support from './components/pages/Support';
+import Terms from './components/pages/Terms';
+import Privacy from './components/pages/Privacy';
+import Cookies from './components/pages/Cookies';
 
 // Protected Route wrapper component
 const ProtectedRoute = ({ children }) => {
@@ -53,7 +73,6 @@ const ProtectedRoute = ({ children }) => {
   return children;
 };
 
-// Add the new component
 function App() {
   const location = useLocation();
   
@@ -61,7 +80,7 @@ function App() {
   const isLandingPage = location.pathname === '/';
   const isAuthPage = ['/login', '/signup'].includes(location.pathname);
   const showNavbar = !isAuthPage;
-  const showFooter = location.pathname === '/';
+  const showFooter = !isAuthPage; // Show footer on all pages except auth pages
 
   return (
     <HelmetProvider>
@@ -69,6 +88,7 @@ function App() {
         <title>Intellectual Oasis Fellowship</title>
       </Helmet>
       <AuthProvider>
+        <ScrollToTop />
         <div className="App min-h-screen flex flex-col">
           {showNavbar && <Navbar />}
           <main className={`flex-grow ${!isLandingPage ? 'mt-20' : ''}`}>
@@ -157,10 +177,50 @@ function App() {
                   <BlogManagement />
                 </AdminRoute>
               } />
+              {/* Scholarship Routes */}
+              <Route path="/scholarships" element={<ScholarshipPage />} />
+              <Route path="/scholarships/:scholarshipId/apply" element={
+                <PrivateRoute>
+                  <ScholarshipApplication />
+                </PrivateRoute>
+              } />
+              <Route path="/scholarships/my-applications" element={
+                <PrivateRoute>
+                  <MyApplications />
+                </PrivateRoute>
+              } />
+              <Route path="/scholarships/application-success" element={
+                <PrivateRoute>
+                  <ApplicationSuccess />
+                </PrivateRoute>
+              } />
+              <Route path="/admin/scholarships" element={
+                <AdminRoute>
+                  <ScholarshipManagement />
+                </AdminRoute>
+              } />
+              <Route path="/admin/contact" element={
+                <AdminRoute>
+                  <ContactManagement />
+                </AdminRoute>
+              } />
+              <Route path="/admin/donations" element={
+                <AdminRoute>
+                  <DonationManagement />
+                </AdminRoute>
+              } />
+              <Route path="/donate" element={<Donate />} />
+              <Route path="/about" element={<About />} />
+              <Route path="/faq" element={<FAQ />} />
+              <Route path="/support" element={<Support />} />
+              <Route path="/terms" element={<Terms />} />
+              <Route path="/privacy" element={<Privacy />} />
+              <Route path="/cookies" element={<Cookies />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </main>
           {showFooter && <Footer />}
+          <CookieConsent />
         </div>
       </AuthProvider>
     </HelmetProvider>

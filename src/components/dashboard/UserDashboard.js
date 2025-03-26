@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { db } from '../config/firebaseConfig';
+import { db } from '../../firebase';
 import { collection, getDocs, query, where, limit, startAfter, getDoc, doc } from 'firebase/firestore';
 import CoursesTray from '../courses/CoursesTray';
 import EnrolledCourses from '../courses/EnrolledCourses';
@@ -229,11 +229,11 @@ function Dashboard() {
                   <span className="text-sm">Blog</span>
                 </button>
                 <button 
-                  onClick={() => navigate('/resources')}
+                  onClick={() => navigate('/scholarships/my-applications')}
                   className="p-4 bg-gray-50 rounded-lg flex flex-col items-center"
                 >
-                  <span className="text-2xl mb-2">📌</span>
-                  <span className="text-sm">Resources</span>
+                  <span className="text-2xl mb-2">📝</span>
+                  <span className="text-sm">My Applications</span>
                 </button>
                 <button 
                   onClick={() => navigate('/profile-settings')}

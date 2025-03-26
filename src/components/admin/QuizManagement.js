@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { db } from '../config/firebaseConfig';
+import { db } from '../../firebase';
 import { collection, addDoc, getDocs, deleteDoc, doc, serverTimestamp, writeBatch, query, where } from 'firebase/firestore';
 
 function QuizManagement() {

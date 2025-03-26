@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import {auth, db } from '../config/firebaseConfig';
+import { auth, db } from '../../firebase';
 import { createUserWithEmailAndPassword, updateProfile, sendEmailVerification, GoogleAuthProvider, signInWithRedirect } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
 import { Link, useNavigate } from 'react-router-dom';
@@ -30,20 +30,58 @@ function SignUp() {
     }
   };
 
+  // Add password validation function
+  const validatePassword = (password) => {
+    const minLength = 8;
+    const hasUpperCase = /[A-Z]/.test(password);
+    const hasLowerCase = /[a-z]/.test(password);
+    const hasNumbers = /\d/.test(password);
+    const hasSpecialChar = /[!@#$%^&*(),.?":{}|<>]/.test(password);
+    
+    if (password.length < minLength) {
+      return 'Password must be at least 8 characters long';
+    }
+    if (!hasUpperCase || !hasLowerCase) {
+      return 'Password must contain both uppercase and lowercase letters';
+    }
+    if (!hasNumbers) {
+      return 'Password must contain at least one number';
+    }
+    if (!hasSpecialChar) {
+      return 'Password must contain at least one special character';
+    }
+    return null;
+  };
+
+  // Add input sanitization function
+  const sanitizeInput = (input) => {
+    return input.trim().replace(/[<>]/g, '');
+  };
+
   const handleSignUp = async (e) => {
     e.preventDefault();
     setError('');
+    
+    // Sanitize inputs
+    const sanitizedName = sanitizeInput(name);
+    const sanitizedEmail = sanitizeInput(email);
     
     if (password !== confirmPassword) {
       setError('Passwords do not match');
       return;
     }
 
+    const passwordError = validatePassword(password);
+    if (passwordError) {
+      setError(passwordError);
+      return;
+    }
+
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const userCredential = await createUserWithEmailAndPassword(auth, sanitizedEmail, password);
       const user = userCredential.user;
       
-      await updateProfile(user, { displayName: name });
+      await updateProfile(user, { displayName: sanitizedName });
       await sendEmailVerification(user);
       await saveUserToFirestore(user);
       
@@ -121,10 +159,12 @@ function SignUp() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              minLength="6"
+              minLength="8"
               className="mt-1 block w-full rounded-full border-gray-300 shadow-sm focus:border-iof focus:ring-iof"
             />
-            <p className="mt-1 text-sm text-gray-500">Password must be at least 6 characters long.</p>
+            <p className="mt-1 text-sm text-gray-500">
+              Password must be at least 8 characters long and contain uppercase, lowercase, numbers, and special characters.
+            </p>
           </div>
           <div>
             <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">Confirm Password</label>

@@ -4,24 +4,29 @@ import { motion, AnimatePresence } from 'framer-motion';
 function FAQ() {
   const faqs = [
     {
-      question: "How do I apply for a scholarship?",
-      answer: "You can apply for scholarships through our platform by creating an account, completing your profile, and submitting the required documentation. Our system will match you with eligible opportunities.",
+      question: "What is the Intellectual Oasis Fellowship Scholarship Program?",
+      answer: "The Intellectual Oasis Fellowship Scholarship Program is a transformative initiative that has supported over 300 students in their educational journey. We provide financial assistance to deserving students, helping them achieve their academic goals and contribute to society.",
       category: "Scholarships"
     },
     {
-      question: "What resources are available for exam preparation?",
-      answer: "We offer comprehensive exam preparation resources including practice tests, study guides, video tutorials, and one-on-one coaching sessions with expert tutors.",
-      category: "Resources"
+      question: "How can I apply for an IOF scholarship?",
+      answer: "To apply for an IOF scholarship, visit our scholarship portal, create an account, and complete the application form. You'll need to provide academic records, personal information, and supporting documents. Our team carefully reviews each application to select the most deserving candidates.",
+      category: "Scholarships"
     },
     {
-      question: "How can I track my progress?",
-      answer: "Our platform provides detailed analytics and progress tracking tools that show your advancement through courses, practice test scores, and overall performance metrics.",
-      category: "Learning"
+      question: "How can I support the scholarship program?",
+      answer: "You can support our scholarship program through donations. Your contribution helps us provide more opportunities to deserving students. We accept both one-time and recurring donations, and all contributions are used directly to fund student scholarships.",
+      category: "Support"
     },
     {
-      question: "Is financial aid available?",
-      answer: "Yes, we offer various financial aid options and can connect you with scholarship opportunities based on your academic profile and eligibility criteria.",
-      category: "Financial Aid"
+      question: "What impact has the scholarship program made?",
+      answer: "Since its inception, the Intellectual Oasis Fellowship has supported over 300 students through our scholarship program. These students have gone on to excel in their studies and make meaningful contributions to their communities. We're proud to be part of their educational journey.",
+      category: "Impact"
+    },
+    {
+      question: "What types of scholarships are available?",
+      answer: "We offer various types of scholarships including merit-based awards, need-based assistance, and specialized program scholarships. Each scholarship is designed to support different aspects of education, from tuition fees to study materials and living expenses.",
+      category: "Scholarships"
     }
   ];
 

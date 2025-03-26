@@ -8,9 +8,9 @@ import Contact from '../layout/Contact';
 
 function LandingPage() {
   const seoData = {
-    title: "Intellectual Oasis Fellowship - Empowering Education Through Technology",
-    description: "Access world-class education with IOF's scholarship platform, course certification, and quiz generation tools. Join thousands of successful students in their educational journey.",
-    keywords: "scholarship, education, online learning, Nigeria education, course certification, quiz platform, fellowship",
+    title: "Intellectual Oasis Fellowship - Empowering Education Through Scholarships",
+    description: "Join IOF in transforming education. We've supported over 300 students through our scholarship program. Make a difference by donating to help more students achieve their academic dreams.",
+    keywords: "scholarship program, education funding, student support, academic fellowship, education donations, Nigeria education, student scholarships, IOF scholarships",
     image: "/images/og-image.jpg" // Add your OG image
   };
 
@@ -28,7 +28,15 @@ function LandingPage() {
     ],
     "offers": {
       "@type": "Offer",
-      "category": "Educational Scholarship"
+      "category": "Educational Scholarship",
+      "description": "Scholarship program supporting over 300 students in their educational journey",
+      "numberOfItems": "300+"
+    },
+    "foundingDate": "2020",
+    "numberOfEmployees": {
+      "@type": "QuantitativeValue",
+      "value": "300+",
+      "unitText": "Students Supported"
     }
   };
 

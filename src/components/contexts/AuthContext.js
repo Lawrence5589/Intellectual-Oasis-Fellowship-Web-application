@@ -9,7 +9,7 @@ import {
   updateProfile
 } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { db } from '../config/firebaseConfig';
+import { db } from '../../firebase';
 
 const AuthContext = createContext();
 
@@ -18,6 +18,7 @@ export function useAuth() {
 }
 
 export function AuthProvider({ children }) {
+  const [currentUser, setCurrentUser] = useState(null);
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const auth = getAuth();
@@ -96,6 +97,7 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
+        setCurrentUser(user);
         // Get additional user data from Firestore
         const userDoc = await getDoc(doc(db, 'users', user.uid));
         if (userDoc.exists()) {
@@ -104,6 +106,7 @@ export function AuthProvider({ children }) {
           setUser(user);
         }
       } else {
+        setCurrentUser(null);
         setUser(null);
       }
       setLoading(false);
@@ -114,6 +117,7 @@ export function AuthProvider({ children }) {
 
   const value = {
     user,
+    currentUser,
     signup,
     login,
     logout,

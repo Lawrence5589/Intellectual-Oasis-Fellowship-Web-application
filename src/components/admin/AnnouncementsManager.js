@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { collection, addDoc, getDocs, query, orderBy, where, updateDoc, deleteDoc, doc } from 'firebase/firestore';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
-import { db } from '../config/firebaseConfig';
+import { db } from '../../firebase';
 import LoadingIndicator from '../common/LoadingIndicator';
 
 function AnnouncementsManager() {
