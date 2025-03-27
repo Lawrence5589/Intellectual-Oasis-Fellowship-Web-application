@@ -4,6 +4,14 @@ import { collection, getDocs, doc, deleteDoc, updateDoc, getDoc } from 'firebase
 import { useAuth } from '../contexts/AuthContext';
 import LoadingIndicator from '../common/LoadingIndicator';
 
+const ADMIN_ROLES = [
+  'admin-master',
+  'admin-content_manager',
+  'admin-smecourse_manager',
+  'admin-support_manager',
+  'admin-scholarship_manager'
+];
+
 function UserManagement() {
   const [users, setUsers] = useState([]);
   const [error, setError] = useState('');
@@ -26,8 +34,15 @@ function UserManagement() {
 
         // Check admin status
         const userDoc = await getDoc(doc(db, 'users', user.uid));
-        if (!userDoc.exists() || userDoc.data().role !== 'admin') {
+        if (!userDoc.exists() || !ADMIN_ROLES.includes(userDoc.data().role)) {
           setError('Access denied. Admin privileges required.');
+          setLoading(false);
+          return;
+        }
+
+        // Only admin-master can access user management
+        if (userDoc.data().role !== 'admin-master') {
+          setError('Access denied. Master admin privileges required.');
           setLoading(false);
           return;
         }
@@ -51,6 +66,12 @@ function UserManagement() {
 
   const handleRoleChange = async (userId, newRole) => {
     try {
+      // Validate the new role
+      if (!ADMIN_ROLES.includes(newRole) && newRole !== 'user') {
+        setError('Invalid role selected');
+        return;
+      }
+
       await updateDoc(doc(db, 'users', userId), { role: newRole });
       setUsers(users.map(u => 
         u.id === userId ? { ...u, role: newRole } : u
@@ -100,8 +121,12 @@ function UserManagement() {
           className="p-2 border rounded"
         >
           <option value="all">All Roles</option>
-          <option value="admin">Admin</option>
           <option value="user">User</option>
+          {ADMIN_ROLES.map(role => (
+            <option key={role} value={role}>
+              {role.replace('admin-', '').replace('_', ' ').toUpperCase()}
+            </option>
+          ))}
         </select>
       </div>
 
@@ -120,15 +145,25 @@ function UserManagement() {
               <tr key={user.id}>
                 <td className="px-6 py-4 whitespace-nowrap text-sm">{user.name || 'N/A'}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm">{user.email}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm">{user.role}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm">
+                  {user.role ? (
+                    user.role.startsWith('admin-') 
+                      ? user.role.replace('admin-', '').replace('_', ' ').toUpperCase()
+                      : user.role
+                  ) : 'User'}
+                </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm">
                   <select
-                    value={user.role}
+                    value={user.role || 'user'}
                     onChange={(e) => handleRoleChange(user.id, e.target.value)}
                     className="p-1 border rounded"
                   >
                     <option value="user">User</option>
-                    <option value="admin">Admin</option>
+                    {ADMIN_ROLES.map(role => (
+                      <option key={role} value={role}>
+                        {role.replace('admin-', '').replace('_', ' ').toUpperCase()}
+                      </option>
+                    ))}
                   </select>
                 </td>
               </tr>

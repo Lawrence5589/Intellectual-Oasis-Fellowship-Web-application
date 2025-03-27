@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { motion } from 'framer-motion';
-import emailjs from '@emailjs/browser';
+import { collection, addDoc } from 'firebase/firestore';
+import { db } from '../../firebase';
 
 function Contact() {
   const [formStatus, setFormStatus] = useState({ type: '', message: '' });
@@ -12,26 +13,26 @@ function Contact() {
     setIsSubmitting(true);
 
     try {
-      // Replace these with your EmailJS credentials
-      const result = await emailjs.sendForm(
-        'YOUR_SERVICE_ID', // Get this from EmailJS
-        'YOUR_TEMPLATE_ID', // Get this from EmailJS
-        formRef.current,
-        'YOUR_PUBLIC_KEY' // Get this from EmailJS
-      );
+      const formData = new FormData(formRef.current);
+      const submissionData = {
+        name: formData.get('from_name'),
+        email: formData.get('from_email'),
+        message: formData.get('message'),
+        timestamp: new Date(),
+        status: 'pending',
+        type: 'general' // You can add a type field in the form if needed
+      };
 
-      if (result.text === 'OK') {
-        setFormStatus({
-          type: 'success',
-          message: 'Thank you! Your message has been sent successfully.'
-        });
-        // Clear form
-        formRef.current.reset();
-      } else {
-        throw new Error('Failed to send message');
-      }
+      await addDoc(collection(db, 'contactSubmissions'), submissionData);
+
+      setFormStatus({
+        type: 'success',
+        message: 'Thank you! Your message has been sent successfully.'
+      });
+      // Clear form
+      formRef.current.reset();
     } catch (error) {
-      console.error('Email send error:', error);
+      console.error('Submission error:', error);
       setFormStatus({
         type: 'error',
         message: 'Sorry, there was an error sending your message. Please try again.'

@@ -7,68 +7,117 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function isAdmin() {
-      return isAuthenticated() && 
-             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    function getUserRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+
+    function isAdminMaster() {
+      return isAuthenticated() && getUserRole() == 'admin-master';
+    }
+
+    function isContentManager() {
+      return isAuthenticated() && (getUserRole() == 'admin-master' || getUserRole() == 'admin-content_manager');
+    }
+
+    function isCourseManager() {
+      return isAuthenticated() && (getUserRole() == 'admin-master' || getUserRole() == 'admin-smecourse_manager');
+    }
+
+    function isSupportManager() {
+      return isAuthenticated() && (getUserRole() == 'admin-master' || getUserRole() == 'admin-support_manager');
+    }
+
+    function isScholarshipManager() {
+      return isAuthenticated() && (getUserRole() == 'admin-master' || getUserRole() == 'admin-scholarship_manager');
     }
 
     function isOwner(userId) {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
+    function isAdmin() {
+      return isAuthenticated() && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
     // Users collection
     match /users/{userId} {
-      allow read: if isAuthenticated() && (isOwner(userId) || isAdmin());
-      allow create: if isAuthenticated();
-      allow update: if isOwner(userId) || isAdmin();
-      allow delete: if isAdmin();
+      allow read: if isAuthenticated();  // Only authenticated users can read user data
+      allow write: if isAdmin() || request.auth.uid == userId;  // Admins or users themselves can modify
       
       // Course progress subcollection
       match /courseProgress/{courseId} {
-        allow read, write: if isOwner(userId) || isAdmin();
+        allow read: if isAuthenticated() && (isOwner(userId) || isAdminMaster());
+        allow write: if isOwner(userId) || isAdminMaster() || isCourseManager();
       }
       
       // Exam results subcollection
       match /examResults/{resultId} {
-        allow read, write: if isOwner(userId) || isAdmin();
+        allow read: if isAuthenticated() && (isOwner(userId) || isAdminMaster() || isCourseManager());
+        allow write: if isOwner(userId) || isAdminMaster() || isCourseManager();
       }
       
       // Completed subcourses subcollection
       match /completedSubCourses/{courseId} {
-        allow read, write: if isOwner(userId) || isAdmin();
+        allow read: if isAuthenticated() && (isOwner(userId) || isAdminMaster() || isCourseManager());
+        allow write: if isOwner(userId) || isAdminMaster() || isCourseManager();
       }
     }
 
     // Blog posts collection
     match /blog_posts/{postId} {
       allow read: if true;  // Allow public read access
-      allow create, update, delete: if isAdmin();
+      allow create, update, delete: if isContentManager();  // Only content managers can modify posts
+      
+      // Comments subcollection
+      match /comments/{commentId} {
+        allow read: if true;  // Allow public read access
+        allow create: if isAuthenticated();  // Any authenticated user can comment
+        allow update, delete: if isContentManager() || 
+          (isAuthenticated() && resource.data.authorId == request.auth.uid);  // Content managers or comment authors can modify
+      }
+      
+      // Votes subcollection
+      match /votes/{userId} {
+        allow read: if true;  // Allow public read access
+        allow create, update, delete: if isAuthenticated() && 
+          request.auth.uid == userId;  // Users can only manage their own votes
+      }
+    }
+
+    // Blog comments collection (for backward compatibility)
+    match /blog_comments/{commentId} {
+      allow read: if true;  // Allow public read access
+      allow create: if isAuthenticated();  // Any authenticated user can comment
+      allow update, delete: if isContentManager();  // Only content managers can moderate comments
     }
 
     // Questions collection
     match /questions/{questionId} {
       allow read: if true;  // Anyone can read questions
-      allow write: if isAuthenticated();  // Only authenticated users can write
+      allow write: if isCourseManager();
     }
 
     // Certificates collection
     match /certificates/{certificateId} {
       allow read: if isAuthenticated();
-      allow write: if isAdmin() || (isAuthenticated() && request.resource.data.userId == request.auth.uid);
+      allow write: if isAdminMaster() || isCourseManager() || (isAuthenticated() && request.resource.data.userId == request.auth.uid);
     }
 
     // Courses collection
     match /courses/{courseId} {
       allow read: if isAuthenticated();
-      allow write: if isAdmin();
+      allow write: if isCourseManager();
 
       // Modules subcollection
       match /modules/{moduleId} {
-        allow read, write: if isAuthenticated();
+        allow read: if isAuthenticated();
+        allow write: if isCourseManager();
 
         // SubCourses subcollection
         match /subCourses/{subCourseId} {
-          allow read, write: if isAuthenticated();
+          allow read: if isAuthenticated();
+          allow write: if isCourseManager();
         }
       }
     }
@@ -76,49 +125,138 @@ service cloud.firestore {
     // Quizzes collection
     match /quizzes/{quizId} {
       allow read: if true;
-      allow write: if isAuthenticated();
-      allow delete: if resource.data.createdBy == request.auth.uid;
+      allow write: if isCourseManager();
+      allow delete: if isCourseManager();
     }
     
     // Quiz Participants collection
     match /quiz-participants/{participantId} {
-      allow read, write: if isAuthenticated();
+      allow read: if isAuthenticated();
+      allow write: if isCourseManager();
     }
     
     // Public Quiz Participants collection
     match /public-quiz-participants/{participantId} {
-      allow read, write: if isAuthenticated();
+      allow read: if isAuthenticated();
+      allow write: if isCourseManager();
     }
 
     // Enrolled Courses collection
     match /enrolledCourses/{enrollmentId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated();
-      allow update: if isOwner(resource.data.userId) || isAdmin();
-      allow delete: if isAdmin();
+      allow update: if isOwner(resource.data.userId) || isAdminMaster() || isCourseManager();
+      allow delete: if isAdminMaster() || isCourseManager();
     }
 
     // Leaderboard collection
     match /leaderboard/{entryId} {
       allow read: if isAuthenticated();
-      allow write: if isAdmin();
+      allow write: if isAdminMaster() || isCourseManager();
     }
 
     // General Exam Results collection
     match /examResults/{resultId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated();
+      allow update, delete: if isAdminMaster() || isCourseManager();
     }
 
     // Announcements collection
     match /announcements/{announcement} {
       allow read: if isAuthenticated();
-      allow create, update, delete: if isAdmin();
+      allow create, update, delete: if isAdminMaster();
+    }
+
+    // Contact Messages collection
+    match /contact_messages/{messageId} {
+      allow read: if isSupportManager();
+      allow create: if isAuthenticated();
+      allow update: if isSupportManager();
+      allow delete: if isSupportManager();
+    }
+
+    // Contact Settings collection
+    match /contact_settings/{settingId} {
+      allow read: if isSupportManager();
+      allow write: if isSupportManager();
+    }
+
+    // Contact Categories collection
+    match /contact_categories/{categoryId} {
+      allow read: if isSupportManager();
+      allow write: if isSupportManager();
+    }
+
+    // Contact Templates collection
+    match /contact_templates/{templateId} {
+      allow read: if isSupportManager();
+      allow write: if isSupportManager();
+    }
+
+    // Contact Responses collection
+    match /contact_responses/{responseId} {
+      allow read: if isSupportManager();
+      allow create: if isSupportManager();
+      allow update: if isSupportManager();
+      allow delete: if isSupportManager();
+    }
+
+    // Contact Analytics collection
+    match /contact_analytics/{documentId} {
+      allow read: if isSupportManager();
+      allow write: if isSupportManager();
+    }
+
+    // Scholarships collection
+    match /scholarships/{scholarshipId} {
+      allow read: if true;
+      allow write: if isScholarshipManager();
+    }
+
+    // Scholarship Applications collection
+    match /scholarship_applications/{applicationId} {
+      allow read: if isOwner(resource.data.userId) || isScholarshipManager();
+      allow create: if isAuthenticated();
+      allow update, delete: if isScholarshipManager();
+    }
+
+    // Donations collection
+    match /donations/{donationId} {
+      allow read: if isAdminMaster();
+      allow create: if isAuthenticated();
+      allow update, delete: if isAdminMaster();
+    }
+
+    // Analytics collection
+    match /analytics/{documentId} {
+      allow read: if isAdminMaster();
+      allow write: if isAdminMaster();
+    }
+
+    // Reports collection
+    match /reports/{reportId} {
+      allow read: if isAdminMaster();
+      allow write: if isAdminMaster();
+    }
+
+    // User Progress collection
+    match /user_progress/{userId} {
+      allow read: if isOwner(userId) || isAdminMaster();
+      allow write: if isOwner(userId) || isAdminMaster();
+    }
+
+    // Contact Submissions collection
+    match /contactSubmissions/{submissionId} {
+      allow read: if isSupportManager();
+      allow create: if isAuthenticated();
+      allow update: if isSupportManager();
+      allow delete: if isSupportManager();
     }
     
     // Catch-all for admin to have access to everything not explicitly listed
     match /{document=**} {
-      allow read, write: if isAdmin();
+      allow read, write: if isAdminMaster();
     }
   }
 }

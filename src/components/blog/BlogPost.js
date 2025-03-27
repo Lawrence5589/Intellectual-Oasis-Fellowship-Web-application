@@ -6,6 +6,8 @@ import { FiClock, FiUser, FiTag, FiArrowLeft, FiShare2 } from 'react-icons/fi';
 import SEO from '../seo/SEO';
 import LoadingIndicator from '../common/LoadingIndicator';
 import AdUnit from '../ads/AdUnit';
+import { AdvancedImage, responsive, placeholder } from '@cloudinary/react';
+import { cld } from '../../config/cloudinary';
 
 function BlogPost() {
   const { postId } = useParams();
@@ -17,14 +19,22 @@ function BlogPost() {
   const [votes, setVotes] = useState({ upvotes: 0, downvotes: 0 });
   const [userVote, setUserVote] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-
+  const [commentsLoading, setCommentsLoading] = useState(true);
+  const [votesLoading, setVotesLoading] = useState(true);
 
   useEffect(() => {
     const fetchPost = async () => {
       try {
         const postDoc = await getDoc(doc(db, 'blog_posts', postId));
         if (postDoc.exists()) {
-          setPost({ id: postDoc.id, ...postDoc.data() });
+          const postData = postDoc.data();
+          setPost({ 
+            id: postDoc.id, 
+            ...postData,
+            // Initialize votes if they don't exist
+            upvotes: postData.upvotes || 0,
+            downvotes: postData.downvotes || 0
+          });
         } else {
           navigate('/blog');
         }
@@ -40,36 +50,60 @@ function BlogPost() {
 
   useEffect(() => {
     const fetchCommentsAndVotes = async () => {
+      if (!postId) return;
+
       try {
+        setCommentsLoading(true);
+        setVotesLoading(true);
+
         // Fetch comments
-        const commentsSnapshot = await getDocs(
-          query(
-            collection(db, 'blog_posts', postId, 'comments'),
-            orderBy('createdAt', 'desc')
-          )
-        );
+        const commentsRef = collection(db, 'blog_posts', postId, 'comments');
+        const commentsQuery = query(commentsRef, orderBy('createdAt', 'desc'));
+        const commentsSnapshot = await getDocs(commentsQuery);
+        
         const commentsData = commentsSnapshot.docs.map(doc => ({
           id: doc.id,
-          ...doc.data()
+          ...doc.data(),
+          likedBy: doc.data().likedBy || [],
+          likes: doc.data().likes || 0
         }));
+        
         setComments(commentsData);
+        setCommentsLoading(false);
 
         // Fetch votes
-        const votesDoc = await getDoc(doc(db, 'blog_posts', postId));
-        if (votesDoc.exists()) {
-          setVotes({
-            upvotes: votesDoc.data().upvotes || 0,
-            downvotes: votesDoc.data().downvotes || 0
-          });
+        const votesRef = collection(db, 'blog_posts', postId, 'votes');
+        const votesSnapshot = await getDocs(votesRef);
+        
+        const votesData = votesSnapshot.docs.reduce((acc, doc) => {
+          acc[doc.id] = doc.data().vote;
+          return acc;
+        }, {});
+
+        // Set user's vote if logged in
+        if (auth.currentUser) {
+          const userVoteDoc = votesSnapshot.docs.find(doc => doc.id === auth.currentUser.uid);
+          if (userVoteDoc) {
+            setUserVote(userVoteDoc.data().vote);
+          }
         }
+
+        // Calculate total votes
+        const totalVotes = Object.values(votesData).reduce((acc, vote) => {
+          acc[`${vote}s`] = (acc[`${vote}s`] || 0) + 1;
+          return acc;
+        }, { upvotes: 0, downvotes: 0 });
+
+        setVotes(totalVotes);
+        setVotesLoading(false);
       } catch (error) {
         console.error('Error fetching comments and votes:', error);
+        setCommentsLoading(false);
+        setVotesLoading(false);
       }
     };
 
-    if (postId) {
-      fetchCommentsAndVotes();
-    }
+    fetchCommentsAndVotes();
   }, [postId]);
 
   const handleShare = async () => {
@@ -103,7 +137,8 @@ function BlogPost() {
         author: auth.currentUser.displayName || 'Anonymous',
         authorId: auth.currentUser.uid,
         createdAt: serverTimestamp(),
-        likes: 0
+        likes: 0,
+        likedBy: []
       });
 
       setComments(prev => [{
@@ -112,13 +147,14 @@ function BlogPost() {
         author: auth.currentUser.displayName || 'Anonymous',
         authorId: auth.currentUser.uid,
         createdAt: new Date(),
-        likes: 0
+        likes: 0,
+        likedBy: []
       }, ...prev]);
       
       setNewComment('');
     } catch (error) {
       console.error('Error posting comment:', error);
-      alert('Failed to post comment. Please try again.');
+      alert('Failed to post comment. Please try again later.');
     } finally {
       setIsSubmitting(false);
     }
@@ -150,7 +186,9 @@ function BlogPost() {
             return {
               ...comment,
               likes: userLiked ? comment.likes - 1 : comment.likes + 1,
-              userLiked: !userLiked
+              likedBy: userLiked 
+                ? comment.likedBy.filter(id => id !== auth.currentUser.uid)
+                : [...comment.likedBy, auth.currentUser.uid]
             };
           }
           return comment;
@@ -158,6 +196,7 @@ function BlogPost() {
       }
     } catch (error) {
       console.error('Error liking comment:', error);
+      alert('Failed to like comment. Please try again later.');
     }
   };
 
@@ -271,6 +310,19 @@ function BlogPost() {
             </div>
           </div>
 
+          {/* Add this after the post header section */}
+          {post.image && (
+            <div className="mb-12">
+              <div className="aspect-w-16 aspect-h-9 rounded-xl overflow-hidden shadow-lg">
+                <AdvancedImage
+                  cldImg={cld.image(post.image)}
+                  plugins={[responsive(), placeholder()]}
+                  className="object-cover w-full h-full"
+                />
+              </div>
+            </div>
+          )}
+
           {/* Post Content */}
           <div className="prose prose-lg max-w-none mb-8">
             <div 
@@ -372,73 +424,85 @@ function BlogPost() {
             <h2 className="text-2xl font-serif font-bold text-gray-900 mb-8">Discussion</h2>
             
             {/* Comment Form */}
-            <form onSubmit={handleCommentSubmit} className="mb-12">
-              <textarea
-                value={newComment}
-                onChange={(e) => setNewComment(e.target.value)}
-                placeholder="Share your thoughts..."
-                className="w-full p-4 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[rgb(130,88,18)] focus:border-transparent transition-all duration-300 min-h-[120px] text-gray-700 placeholder-gray-400 font-serif"
-                required
-              />
-              <div className="mt-4 flex justify-end">
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="bg-[rgb(130,88,18)] text-white px-6 py-3 rounded-lg hover:bg-[rgb(110,68,0)] transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-                >
-                  {isSubmitting ? (
-                    <span className="flex items-center">
-                      <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                      Posting...
-                    </span>
-                  ) : 'Post Comment'}
-                </button>
-              </div>
-            </form>
+            {post?.allowComments !== false && (
+              <form onSubmit={handleCommentSubmit} className="mb-12">
+                <textarea
+                  value={newComment}
+                  onChange={(e) => setNewComment(e.target.value)}
+                  placeholder="Share your thoughts..."
+                  className="w-full p-4 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[rgb(130,88,18)] focus:border-transparent transition-all duration-300 min-h-[120px] text-gray-700 placeholder-gray-400 font-serif"
+                  required
+                />
+                <div className="mt-4 flex justify-end">
+                  <button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="bg-[rgb(130,88,18)] text-white px-6 py-3 rounded-lg hover:bg-[rgb(110,68,0)] transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                  >
+                    {isSubmitting ? (
+                      <span className="flex items-center">
+                        <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Posting...
+                      </span>
+                    ) : 'Post Comment'}
+                  </button>
+                </div>
+              </form>
+            )}
 
             {/* Comments List */}
             <div className="space-y-6">
-              {comments.map((comment) => (
-                <div key={comment.id} className="bg-white p-6 rounded-lg shadow-sm">
-                  <div className="flex items-start space-x-4">
-                    <div className="flex-shrink-0">
-                      <div className="w-10 h-10 bg-[rgb(130,88,18)] rounded-full flex items-center justify-center text-white font-medium text-lg">
-                        {comment.author[0].toUpperCase()}
-                      </div>
-                    </div>
-                    <div className="flex-grow">
-                      <div className="flex items-center justify-between mb-2">
-                        <div>
-                          <span className="font-semibold text-gray-900">{comment.author}</span>
-                          <span className="mx-2 text-gray-300">•</span>
-                          <span className="text-sm text-gray-500">
-                            {comment.createdAt?.toDate ? 
-                              new Date(comment.createdAt.toDate()).toLocaleDateString() :
-                              new Date(comment.createdAt).toLocaleDateString()}
-                          </span>
+              {commentsLoading ? (
+                <div className="flex justify-center py-8">
+                  <LoadingIndicator />
+                </div>
+              ) : comments.length > 0 ? (
+                comments.map((comment) => (
+                  <div key={comment.id} className="bg-white p-6 rounded-lg shadow-sm">
+                    <div className="flex items-start space-x-4">
+                      <div className="flex-shrink-0">
+                        <div className="w-10 h-10 bg-[rgb(130,88,18)] rounded-full flex items-center justify-center text-white font-medium text-lg">
+                          {comment.author[0].toUpperCase()}
                         </div>
-                        <button
-                          onClick={() => handleCommentLike(comment.id)}
-                          className={`flex items-center space-x-2 px-3 py-1 rounded-full transition-all duration-300 ${
-                            comment.userLiked 
-                              ? 'text-[rgb(130,88,18)] bg-[rgb(130,88,18)]/10' 
-                              : 'text-gray-400 hover:text-[rgb(130,88,18)] hover:bg-[rgb(130,88,18)]/10'
-                          }`}
-                        >
-                          <svg className="w-4 h-4" fill={comment.userLiked ? "currentColor" : "none"} stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-                          </svg>
-                          <span className="font-medium">{comment.likes}</span>
-                        </button>
                       </div>
-                      <p className="text-gray-700 leading-relaxed font-serif">{comment.content}</p>
+                      <div className="flex-grow">
+                        <div className="flex items-center justify-between mb-2">
+                          <div>
+                            <span className="font-semibold text-gray-900">{comment.author}</span>
+                            <span className="mx-2 text-gray-300">•</span>
+                            <span className="text-sm text-gray-500">
+                              {comment.createdAt?.toDate ? 
+                                new Date(comment.createdAt.toDate()).toLocaleDateString() :
+                                new Date(comment.createdAt).toLocaleDateString()}
+                            </span>
+                          </div>
+                          <button
+                            onClick={() => handleCommentLike(comment.id)}
+                            className={`flex items-center space-x-2 px-3 py-1 rounded-full transition-all duration-300 ${
+                              comment.likedBy.includes(auth.currentUser.uid)
+                                ? 'text-[rgb(130,88,18)] bg-[rgb(130,88,18)]/10' 
+                                : 'text-gray-400 hover:text-[rgb(130,88,18)] hover:bg-[rgb(130,88,18)]/10'
+                            }`}
+                          >
+                            <svg className="w-4 h-4" fill={comment.likedBy.includes(auth.currentUser.uid) ? "currentColor" : "none"} stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                            </svg>
+                            <span className="font-medium">{comment.likes}</span>
+                          </button>
+                        </div>
+                        <p className="text-gray-700 leading-relaxed font-serif">{comment.content}</p>
+                      </div>
                     </div>
                   </div>
+                ))
+              ) : (
+                <div className="text-center py-8">
+                  <p className="text-gray-500">No comments yet. Be the first to comment!</p>
                 </div>
-              ))}
+              )}
             </div>
           </div>
         </div>

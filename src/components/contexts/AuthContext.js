@@ -37,7 +37,7 @@ export function AuthProvider({ children }) {
         name: name,
         email: email,
         createdAt: new Date().toISOString(),
-        role: 'student' // default role
+        role: 'user' // default role
       });
 
       return userCredential;
@@ -85,7 +85,8 @@ export function AuthProvider({ children }) {
     try {
       const userDoc = await getDoc(doc(db, 'users', user.uid));
       if (userDoc.exists()) {
-        return userDoc.data().role === 'admin';
+        const role = userDoc.data().role;
+        return role.startsWith('admin-');
       }
       return false;
     } catch (error) {
@@ -101,7 +102,8 @@ export function AuthProvider({ children }) {
         // Get additional user data from Firestore
         const userDoc = await getDoc(doc(db, 'users', user.uid));
         if (userDoc.exists()) {
-          setUser({ ...user, ...userDoc.data() });
+          const userData = userDoc.data();
+          setUser({ ...user, ...userData });
         } else {
           setUser(user);
         }
